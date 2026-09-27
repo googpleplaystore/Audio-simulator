@@ -169,6 +169,7 @@ export function hardwareView(app, params, query, disposer) {
       ];
       const table = h('table.spec-table', h('thead', h('tr', h('th'), models.map((m, i) => h('th', { style: { color: COMPARE_COLORS[i] } }, m.name)))), h('tbody', rows.map(([k, fn]) => h('tr', h('td.dim', k), models.map((m) => h('td', fn(m)))))));
       requestAnimationFrame(() => {
+        if (!cv.isConnected) return;
         const plot = new ResponsePlot(cv, { fMin: 10, fMax: 24000, dbMin: -30, dbMax: 12 });
         plot.setCurves(models.map((m, i) => {
           const r = responseCurve(m);
@@ -199,7 +200,7 @@ export function hardwareView(app, params, query, disposer) {
   return { el, title: 'Hardware Catalog' };
 }
 
-export function hardwareDetailView(app, params) {
+export function hardwareDetailView(app, params, query, disposer) {
   const hw = getHardware(params.id);
   if (!hw) return notFound('Model not found');
   const cv = h('canvas.detail-plot');
@@ -233,7 +234,9 @@ export function hardwareDetailView(app, params) {
       ['Price (pair)', `${formatPrice(hw.price)} (${hw.priceBracket})`],
     ];
   requestAnimationFrame(() => {
+    if (disposer.disposed) return;
     const plot = new ResponsePlot(cv, { fMin: isSub ? 10 : 20, fMax: isSub ? 500 : 24000, dbMin: -30, dbMax: 12 });
+    disposer.add(() => plot.destroy());
     const r = responseCurve(hw, logspace(isSub ? 8 : 15, isSub ? 600 : 24000, 300));
     plot.markers = [{ f: hw.f3, color: 'rgba(255,181,71,0.8)', label: `f3 ${hw.f3} Hz` }];
     if (hw.crossoverHz) plot.markers.push({ f: hw.crossoverHz, color: 'rgba(54,226,207,0.7)', label: 'Internal crossover' });

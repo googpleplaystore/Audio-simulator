@@ -90,14 +90,19 @@ export function listen(target, type, fn, opts) {
 export class Disposer {
   constructor() {
     this.fns = [];
+    this.disposed = false;
   }
 
+  /** Register a cleanup; runs it at once if the owner is already disposed. */
   add(fn) {
-    if (typeof fn === 'function') this.fns.push(fn);
+    if (typeof fn !== 'function') return fn;
+    if (this.disposed) fn();
+    else this.fns.push(fn);
     return fn;
   }
 
   run() {
+    this.disposed = true;
     for (const fn of this.fns.splice(0)) {
       try {
         fn();

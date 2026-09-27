@@ -26,7 +26,16 @@ export class ResponsePlot {
     this.selected = -1;
     this.pad = { l: 38, r: 12, t: 12, b: 22 };
     this._bind();
-    this.ro = new ResizeObserver(() => this.draw());
+    // Redraw on resize; once the canvas has been attached and is then removed
+    // from the document, release the observer so closed views never leak.
+    this.wasConnected = false;
+    this.destroyed = false;
+    this.ro = new ResizeObserver(() => {
+      if (canvas.isConnected) {
+        this.wasConnected = true;
+        this.draw();
+      } else if (this.wasConnected) this.destroy();
+    });
     this.ro.observe(canvas);
   }
 
@@ -66,6 +75,7 @@ export class ResponsePlot {
   }
 
   draw() {
+    if (this.destroyed) return;
     const { ctx, w, h } = fitCanvas(this.canvas);
     ctx.clearRect(0, 0, w, h);
     // Shaded bands
@@ -279,6 +289,7 @@ export class ResponsePlot {
   }
 
   destroy() {
+    this.destroyed = true;
     this.ro.disconnect();
   }
 }

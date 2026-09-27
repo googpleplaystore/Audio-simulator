@@ -233,7 +233,7 @@ export function roomView(app, params, query, disposer) {
       h('aside.inspector', h('div.inspector-tabs', tabs), inspector),
     ),
   );
-  return { el, title: 'Room Simulator', mounted: () => canvas.focus({ preventScroll: true }) };
+  return { el, title: 'Room Simulator', editor, mounted: () => canvas.focus({ preventScroll: true }) };
 }
 
 async function removeSource(app, type, id, editor) {
@@ -310,6 +310,7 @@ function sourcePanel(app, sel, editor, refresh) {
       const cv = h('canvas.mini-plot');
       body.append(h('div.field', h('label', 'Modal room response at your seat'), cv));
       requestAnimationFrame(() => {
+        if (!cv.isConnected) return; // the inspector re-rendered first
         const plot = new ResponsePlot(cv, { fMin: 15, fMax: Math.max(...roomRes.freqs), dbMin: -24, dbMax: 24, dbStep: 12 });
         plot.pad.l = 30;
         const fitted = cascadeMagnitudeDb(roomRes.filters, roomRes.freqs);
