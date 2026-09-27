@@ -114,7 +114,7 @@ test('yaw helpers are consistent', () => {
 test('state migration fills missing keys and drops malformed sources', () => {
   const m = migrateState({ receiver: { masterDb: -30 }, speakers: [{ id: 'x' }], eq: { graphic: { gains: [1, 2] } } });
   assert.equal(m.receiver.masterDb, -30);
-  assert.equal(m.receiver.monitorRefSpl, 85);
+  assert.equal(m.receiver.monitorRefSpl, 92);
   assert.equal(m.speakers.length, 0);
   assert.equal(m.eq.graphic.gains.length, 31);
 });

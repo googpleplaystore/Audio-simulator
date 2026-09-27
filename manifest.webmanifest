@@ -1,0 +1,14 @@
+{
+  "name": "AudioSpace — Virtual Audio Environment Simulator",
+  "short_name": "AudioSpace",
+  "description": "Spatial audio engine, hardware simulator and music player.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#060609",
+  "theme_color": "#060609",
+  "icons": [
+    { "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ],
+  "categories": ["music", "entertainment", "utilities"]
+}

@@ -11,12 +11,20 @@ const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: tr
 export const UNKNOWN_ARTIST = 'Unknown Artist';
 export const UNKNOWN_ALBUM = 'Unknown Album';
 
-const norm = (s) => (s || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').trim();
+const norm = (s) => (s || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '').trim();
 
 export function albumKeyOf(t) {
   const album = norm(t.album || UNKNOWN_ALBUM);
   const who = t.albumArtist ? norm(t.albumArtist) : t.dirPath ? `dir:${norm(t.dirPath)}` : norm(t.artist || UNKNOWN_ARTIST);
   return `${album}|${who}`;
+}
+
+/** Normalised lookup key (case/diacritic-insensitive). */
+export const keyOf = (s) => norm(s);
+
+/** Key of the artist page a track links to. */
+export function artistKeyOf(t) {
+  return norm(t.albumArtist || splitArtists(t.artist)[0] || UNKNOWN_ARTIST);
 }
 
 export function primaryArtist(t) {
@@ -442,6 +450,13 @@ export class Library extends Emitter {
   }
 
   // ---------------------------------------------------------------- files
+
+  /** False only for tracks whose session-only File was lost on reload. */
+  isLinked(id) {
+    if (this.sessionFiles.has(id)) return true;
+    const f = this.fileRecords.get(id);
+    return !!f && f.kind !== 'session';
+  }
 
   isAvailable(id) {
     if (this.sessionFiles.has(id)) return true;

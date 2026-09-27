@@ -70,6 +70,7 @@ export class Player extends Emitter {
     this.failures = 0;
     this.loadToken = 0;
     this.preloaded = null; // {trackId, deckIndex}
+    this.pending = null; // {id, startAt} prepared but not loaded
     this.crossfading = false;
     for (const [i, deck] of this.decks.entries()) this._wire(deck, i);
     this._setupMediaSession();
@@ -86,7 +87,22 @@ export class Player extends Emitter {
   }
 
   get currentTime() {
+    if (!this.deck.url && this.pending) return this.pending.startAt;
     return this.deck.audio.currentTime || 0;
+  }
+
+  /**
+   * Show a track as current without loading it (session restore). The file
+   * is resolved on the first play() — avoids permission prompts at startup.
+   */
+  prepare(trackId, startAt = 0) {
+    const track = this.library.get(trackId);
+    if (!track) return;
+    this.track = track;
+    this.pending = { id: trackId, startAt };
+    this.emit('track', track);
+    this._setState('paused');
+    this._updateMediaSession(track);
   }
 
   get duration() {
@@ -175,6 +191,7 @@ export class Player extends Emitter {
     const track = this.library.get(trackId);
     if (!track) throw new Error('Track not found');
     const token = ++this.loadToken;
+    this.pending = null;
     this.track = track;
     this.crossfading = false;
     this._setState('loading');
@@ -233,6 +250,11 @@ export class Player extends Emitter {
   async play() {
     if (this.unlock) await this.unlock();
     if (!this.deck.url) {
+      if (this.pending) {
+        const p = this.pending;
+        this.pending = null;
+        return this.load(p.id, { startAt: p.startAt });
+      }
       const id = this.queue.currentId || this.queue.next();
       if (id) return this.load(id);
       return;
@@ -266,6 +288,11 @@ export class Player extends Emitter {
   seek(t) {
     const a = this.deck.audio;
     if (!Number.isFinite(t)) return;
+    if (!this.deck.url && this.pending) {
+      this.pending.startAt = clamp(t, 0, this.track?.duration || t);
+      this.emit('seek', this.pending.startAt);
+      return;
+    }
     const d = this.duration;
     a.currentTime = clamp(t, 0, d ? d - 0.05 : t);
     this.preloaded = null;

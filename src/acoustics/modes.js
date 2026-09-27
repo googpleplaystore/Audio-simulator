@@ -141,15 +141,39 @@ function lr4LowMag(f, fc) {
  * to the free field at the listener distance; above it blends to 0 dB (the
  * reverb convolver supplies the diffuse field there).
  */
+export const HEAD_OFFSETS = [
+  [0, 0, 0],
+  [0.1, 0, 0],
+  [-0.1, 0, 0],
+  [0, 0, 0.1],
+  [0, 0, -0.1],
+];
+
+/**
+ * Energy-averaged modal transfer over a small head-sized region. A single
+ * point in a room has arbitrarily deep modal nulls; two ears ~18 cm apart and
+ * natural head movement make the perceived response considerably smoother.
+ */
+export function modalPowerAveraged(model, src, lis, freqs, offsets = HEAD_OFFSETS) {
+  const pw = new Float64Array(freqs.length);
+  for (const [ox, oy, oz] of offsets) {
+    const p = { x: lis.x + ox, y: (lis.y ?? 1.15) + oy, z: lis.z + oz };
+    const { re, im } = modalTransfer(model, src, p, freqs);
+    for (let i = 0; i < freqs.length; i++) pw[i] += re[i] * re[i] + im[i] * im[i];
+  }
+  for (let i = 0; i < freqs.length; i++) pw[i] /= offsets.length;
+  return pw;
+}
+
 export function roomFilterTarget(model, src, lis, freqs, crossover) {
-  const { re, im } = modalTransfer(model, src, lis, freqs);
+  const pw = modalPowerAveraged(model, src, lis, freqs);
   const dx = src.x - lis.x;
   const dy = (src.y ?? 0) - (lis.y ?? 0);
   const dz = src.z - lis.z;
   const r = Math.max(Math.sqrt(dx * dx + dy * dy + dz * dz), 0.25);
   const out = new Float64Array(freqs.length);
   for (let i = 0; i < freqs.length; i++) {
-    const mag = Math.sqrt(re[i] * re[i] + im[i] * im[i]) * r;
+    const mag = Math.sqrt(pw[i]) * r;
     const wl = lr4LowMag(freqs[i], crossover);
     const lin = wl * mag + (1 - wl);
     out[i] = clamp(20 * Math.log10(Math.max(lin, 1e-4)), -22, 20);
