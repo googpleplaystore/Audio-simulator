@@ -1,0 +1,60 @@
+# Maintainer: AudioSpace contributors
+#
+# Builds the AudioSpace desktop launcher (the web app embedded in a small Go
+# binary) from the repository's default branch. For a one-command install
+# run packaging/arch/install.sh, which builds from a local clone.
+
+pkgname=audiospace-git
+_pkgname=audiospace
+pkgver=1.0.0.r0.0000000
+pkgrel=1
+pkgdesc='Virtual audio environment simulator and music player: speakers, subwoofers, amplifiers and room acoustics'
+arch=('x86_64' 'aarch64')
+url='https://github.com/googpleplaystore/Audio-simulator'
+license=('MIT')
+depends=('glibc' 'xdg-utils')
+makedepends=('git' 'go')
+optdepends=('chromium: open AudioSpace in its own app window (recommended)'
+            'google-chrome: open AudioSpace in its own app window'
+            'firefox: open AudioSpace in a browser tab')
+provides=('audiospace')
+conflicts=('audiospace')
+options=('!debug')
+source=("$_pkgname::git+$url.git")
+sha256sums=('SKIP')
+
+pkgver() {
+  cd "$_pkgname"
+  local version
+  version=$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' package.json | head -n1)
+  printf '%s.r%s.%s' "$version" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+prepare() {
+  cd "$_pkgname"
+  packaging/stage-webapp.sh
+}
+
+build() {
+  cd "$_pkgname/desktop"
+  export CGO_CPPFLAGS="$CPPFLAGS" CGO_CFLAGS="$CFLAGS" CGO_CXXFLAGS="$CXXFLAGS" CGO_LDFLAGS="$LDFLAGS"
+  export GOFLAGS='-buildmode=pie -trimpath -mod=readonly -modcacherw'
+  go build -ldflags "-linkmode=external -X main.version=$pkgver" -o audiospace .
+}
+
+check() {
+  cd "$_pkgname/desktop"
+  go test ./...
+}
+
+package() {
+  cd "$_pkgname"
+  install -Dm755 desktop/audiospace "$pkgdir/usr/bin/audiospace"
+  install -Dm644 packaging/linux/audiospace.desktop "$pkgdir/usr/share/applications/audiospace.desktop"
+  install -Dm644 assets/icon.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/audiospace.svg"
+  local size
+  for size in 16 32 48 64 128 256 512; do
+    install -Dm644 "packaging/icons/audiospace-$size.png" "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/audiospace.png"
+  done
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

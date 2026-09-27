@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=AudioSpace
+GenericName=Audio Environment Simulator
+Comment=Play your music through simulated speakers, subwoofers, amplifiers and room acoustics
+Exec=audiospace
+Icon=audiospace
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+Keywords=music;player;speakers;subwoofer;room;acoustics;equalizer;hifi;
+StartupNotify=false
