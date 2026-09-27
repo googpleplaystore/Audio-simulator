@@ -456,6 +456,85 @@ await step('scenes and a complete ABX blind test restore the original system', a
   assert((await page.locator('.modal-backdrop').count()) === 0, 'Enter in a prompt must not reopen it');
 });
 
+await step('no clicks or pops while every control is changed during playback', async () => {
+  const res = await page.evaluate(async () => {
+    const app = window.__audiospace;
+    await app.audio.unlock();
+    app.player.pause();
+    const ctx = app.ctx;
+    const store = app.store;
+    const { LiveRecorder } = await import('/src/audio/bake.js');
+    const { decodeWav } = await import('/src/audio/wav.js');
+    const { roomFromPreset } = await import('/src/acoustics/room.js');
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const sr = ctx.sampleRate;
+    const buf = ctx.createBuffer(2, sr, sr);
+    for (let c = 0; c < 2; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < sr; i++) d[i] = 0.25 * Math.sin((2 * Math.PI * 440 * i) / sr);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    src.connect(app.engine.input);
+    src.start();
+    store.set('player.volume', 0.8);
+    store.set('engine.simulation', true);
+    await sleep(1200);
+    const rec = new LiveRecorder(app.engine);
+    await rec.start();
+    await sleep(300);
+    for (let k = 0; k <= 30; k++) {
+      const g = store.state.eq.graphic.gains.slice();
+      g[17] = Math.round(12 * Math.sin((k / 30) * 2 * Math.PI) * 10) / 10;
+      store.set('eq.graphic.gains', g);
+      await sleep(20);
+    }
+    for (const t of ['highshelf', 'lowshelf', 'peaking']) {
+      store.set('eq.parametric.bands', store.state.eq.parametric.bands.map((x, i) => (i === 2 ? { ...x, type: t, gain: 6 } : x)));
+      await sleep(120);
+    }
+    for (const sl of [12, 48, 24]) {
+      store.set('crossover.slope', sl);
+      await sleep(150);
+    }
+    for (const db of [-30, -12]) {
+      store.set('receiver.masterDb', db);
+      await sleep(100);
+    }
+    for (let i = 0; i < 4; i++) {
+      store.set('engine.simulation', i % 2 === 1);
+      await sleep(150);
+    }
+    store.set('engine.simulation', true);
+    const sp0 = store.state.speakers.map((x) => ({ ...x }));
+    for (let k = 0; k < 15; k++) {
+      store.set('speakers', sp0.map((x, i) => (i === 0 ? { ...x, x: x.x + k * 0.03 } : x)));
+      await sleep(25);
+    }
+    const room0 = store.state.room;
+    store.set('room', { ...room0, ...roomFromPreset('living') });
+    await sleep(900);
+    store.set('room', room0);
+    await sleep(900);
+    const blob = await rec.stop();
+    src.stop();
+    src.disconnect();
+    const x = decodeWav(await blob.arrayBuffer()).channels[0];
+    const win = Math.round(0.005 * sr);
+    const vals = [];
+    for (let s = 2; s + win < x.length; s += win) {
+      let m = 0;
+      for (let i = s; i < s + win; i++) m = Math.max(m, Math.abs(x[i] - 2 * x[i - 1] + x[i - 2]));
+      vals.push([s / sr, m]);
+    }
+    const med = vals.map((v) => v[1]).sort((a, b) => a - b)[vals.length >> 1];
+    return { seconds: x.length / sr, spikes: vals.filter((v) => v[1] > med * 8).map((v) => [+v[0].toFixed(3), +(v[1] / med).toFixed(1)]) };
+  });
+  assert(res.seconds > 4, `recorded ${res.seconds}s`);
+  assert(res.spikes.length === 0, `clicks detected at ${JSON.stringify(res.spikes.slice(0, 8))}`);
+});
+
 await step('settings: speaker output switches panners to equal-power', async () => {
   await page.goto(`${base}#/settings`);
   await page.click('.segmented button:has-text("Speakers (equal-power)")');

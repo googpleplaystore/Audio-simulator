@@ -2,7 +2,7 @@
 // audio file with OfflineAudioContext — faster than realtime and bit-exact
 // with what the realtime engine plays.
 
-import { SimulationEngine } from './engine.js';
+import { SimulationEngine, loadWorkletModule } from './engine.js';
 import { encodeWav } from './wav.js';
 import { computeIR } from '../acoustics/compute.js';
 import { buildPlan, reverbSourcePositions } from './plan.js';
@@ -125,7 +125,7 @@ export class LiveRecorder {
     this.chunks = [[], []];
     this.frames = 0;
     if (this.ctx.audioWorklet) {
-      await this.ctx.audioWorklet.addModule(new URL('./worklets/recorder.worklet.js', import.meta.url));
+      await loadWorkletModule(this.ctx, new URL('./worklets/recorder.worklet.js', import.meta.url).href);
       this.node = new AudioWorkletNode(this.ctx, 'audiospace-recorder', { numberOfInputs: 1, numberOfOutputs: 0, channelCount: 2, channelCountMode: 'explicit' });
       this.node.port.onmessage = (e) => {
         const [l, r] = e.data;

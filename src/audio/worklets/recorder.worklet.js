@@ -13,6 +13,7 @@ class RecorderProcessor extends AudioWorkletProcessor {
       else if (e.data === 'stop') {
         this.flush();
         this.active = false;
+        this.done = true; // let the processor be collected
       }
     };
   }
@@ -26,6 +27,7 @@ class RecorderProcessor extends AudioWorkletProcessor {
   }
 
   process(inputs) {
+    if (this.done) return false;
     if (!this.active) return true;
     const input = inputs[0];
     if (!input || !input.length) return true;

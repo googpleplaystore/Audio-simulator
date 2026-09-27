@@ -73,29 +73,83 @@ export function shaperCurve(kind) {
  * identity (peaking, 0 dB). Changing a stage's *type* is declicked by briefly
  * fading the bank's output.
  */
+const BANK_SETTLE = 0.05; // s the incoming chain runs silently before it is faded in
+const BANK_FADE = 0.03; // s sample-accurate crossfade
+
+/**
+ * A fixed-size cascade of biquads whose specs can change at any time without
+ * clicks. Frequency/gain/Q changes glide on the active chain. Filter *type*
+ * changes cannot be automated, so the bank is double-buffered: the new types
+ * go into the idle chain, which runs silently for a moment and is then
+ * crossfaded in with AudioParam ramps — sample-accurate on the audio clock,
+ * independent of main-thread timer jitter.
+ */
 export class FilterBank {
   constructor(ctx, size, name = 'bank') {
     this.ctx = ctx;
     this.name = name;
     this.size = size;
-    this.filters = [];
     this.input = ctx.createGain();
     this.output = ctx.createGain();
-    let prev = this.input;
-    for (let i = 0; i < size; i++) {
-      const f = ctx.createBiquadFilter();
+    this.chains = [this._chain(), this._chain()];
+    this.active = 0;
+    this.chains[0].gain.gain.value = 1;
+    this.chains[1].gain.gain.value = 0;
+    this._connect(this.chains[0]);
+    this.current = new Array(size).fill(IDENTITY);
+    this.key = '';
+    this.transition = null;
+    this.queued = null;
+  }
+
+  _chain() {
+    const filters = [];
+    const gain = this.ctx.createGain();
+    let prev = null;
+    for (let i = 0; i < this.size; i++) {
+      const f = this.ctx.createBiquadFilter();
       f.type = IDENTITY.type;
       f.frequency.value = IDENTITY.frequency;
       f.Q.value = IDENTITY.Q;
       f.gain.value = 0;
-      prev.connect(f);
+      if (prev) prev.connect(f);
       prev = f;
-      this.filters.push(f);
+      filters.push(f);
     }
-    prev.connect(this.output);
-    this.current = new Array(size).fill(IDENTITY);
-    this.key = '';
-    this.pendingTimer = null;
+    if (prev) prev.connect(gain);
+    gain.connect(this.output);
+    return { filters, gain, first: filters[0] || gain, connected: false };
+  }
+
+  _connect(chain) {
+    if (chain.connected) return;
+    this.input.connect(chain.first);
+    chain.connected = true;
+  }
+
+  _disconnect(chain) {
+    if (!chain.connected) return;
+    try {
+      this.input.disconnect(chain.first);
+    } catch {
+      /* already disconnected */
+    }
+    chain.connected = false;
+  }
+
+  /** The active chain's BiquadFilterNodes. */
+  get filters() {
+    return this.chains[this.active].filters;
+  }
+
+  _program(chain, next, tau) {
+    next.forEach((s, i) => {
+      const f = chain.filters[i];
+      if (f.type !== s.type) f.type = s.type;
+      setParam(this.ctx, f.frequency, Math.min(s.frequency, this.ctx.sampleRate / 2 - 1), tau);
+      setParam(this.ctx, f.Q, s.Q ?? 1, tau);
+      setParam(this.ctx, f.gain, s.gain ?? 0, tau);
+    });
   }
 
   /** Apply specs (array). Returns true if anything changed. */
@@ -104,46 +158,69 @@ export class FilterBank {
     if (specs.length > this.size) console.warn(`[${this.name}] ${specs.length} filters > bank size ${this.size}; truncated`);
     const key = JSON.stringify(list);
     if (key === this.key) return false;
-    this.key = key;
     const next = [];
     for (let i = 0; i < this.size; i++) next.push(list[i] || IDENTITY);
-    const typeChange = next.some((s, i) => s.type !== this.filters[i].type);
-    const apply = (smooth) => {
-      next.forEach((s, i) => {
-        const f = this.filters[i];
-        if (f.type !== s.type) f.type = s.type;
-        const t = smooth ? tau : 0;
-        setParam(this.ctx, f.frequency, Math.min(s.frequency, this.ctx.sampleRate / 2 - 1), t);
-        setParam(this.ctx, f.Q, s.Q ?? 1, t);
-        setParam(this.ctx, f.gain, s.gain ?? 0, t);
-      });
-      this.current = next;
-    };
-    if (typeChange && !immediate(this.ctx)) {
-      // Fade out → switch types → fade in (≈20 ms total) to avoid pops.
-      const g = this.output.gain;
-      const t = this.ctx.currentTime;
-      g.cancelScheduledValues(t);
-      g.setValueAtTime(g.value, t);
-      g.linearRampToValueAtTime(0, t + 0.008);
-      clearTimeout(this.pendingTimer);
-      this.pendingTimer = setTimeout(() => {
-        apply(false);
-        const t2 = this.ctx.currentTime;
-        g.cancelScheduledValues(t2);
-        g.setValueAtTime(0, t2);
-        g.linearRampToValueAtTime(1, t2 + 0.012);
-      }, 14);
-    } else {
-      apply(!immediate(this.ctx));
+    if (this.transition) {
+      // A crossfade is running; apply the latest specs once it has finished.
+      this.queued = { specs, tau };
+      this.key = key;
+      return true;
     }
+    this.key = key;
+    const cur = this.chains[this.active];
+    const typeChange = next.some((s, i) => s.type !== cur.filters[i].type);
+    if (!typeChange || immediate(this.ctx)) {
+      this._program(cur, next, immediate(this.ctx) ? 0 : tau);
+      this.current = next;
+      return true;
+    }
+    const ctx = this.ctx;
+    const nextIdx = 1 - this.active;
+    const inc = this.chains[nextIdx];
+    this._program(inc, next, 0);
+    this._connect(inc);
+    const now = ctx.currentTime;
+    const t0 = now + BANK_SETTLE;
+    const t1 = t0 + BANK_FADE;
+    const go = cur.gain.gain;
+    go.cancelScheduledValues(now);
+    go.setValueAtTime(go.value, now);
+    go.setValueAtTime(go.value, t0);
+    go.linearRampToValueAtTime(0, t1);
+    const gi = inc.gain.gain;
+    gi.cancelScheduledValues(now);
+    gi.setValueAtTime(0, now);
+    gi.setValueAtTime(0, t0);
+    gi.linearRampToValueAtTime(1, t1);
+    this.active = nextIdx;
+    this.current = next;
+    const finish = () => {
+      // Only detach the old chain once the audio clock is past the fade.
+      if (ctx.currentTime < t1 + 0.005 && ctx.state === 'running') {
+        this.transition = setTimeout(finish, Math.max(10, (t1 + 0.01 - ctx.currentTime) * 1000));
+        return;
+      }
+      this._disconnect(cur);
+      this.transition = null;
+      const q = this.queued;
+      this.queued = null;
+      if (q) {
+        this.key = '';
+        this.set(q.specs, q.tau);
+      }
+    };
+    this.transition = setTimeout(finish, (BANK_SETTLE + BANK_FADE) * 1000 + 30);
     return true;
   }
 
   disconnect() {
-    clearTimeout(this.pendingTimer);
+    clearTimeout(this.transition);
+    this.transition = null;
     this.input.disconnect();
-    for (const f of this.filters) f.disconnect();
+    for (const c of this.chains) {
+      for (const f of c.filters) f.disconnect();
+      c.gain.disconnect();
+    }
     this.output.disconnect();
   }
 }

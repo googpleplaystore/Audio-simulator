@@ -27,6 +27,10 @@ const LIMITER_URL = new URL('./worklets/limiter.worklet.js', import.meta.url).hr
 
 const workletModules = new WeakMap();
 
+function immediateCtx(ctx) {
+  return (typeof OfflineAudioContext !== 'undefined' && ctx instanceof OfflineAudioContext) || ctx.state !== 'running';
+}
+
 /** addModule() once per context and URL. */
 export function loadWorkletModule(ctx, url) {
   let mods = workletModules.get(ctx);
@@ -249,6 +253,17 @@ class SourceChain {
   }
 }
 
+/**
+ * True-stereo convolution reverb with click-free IR swaps. Assigning a
+ * ConvolverNode buffer resets it, so the incoming convolver is first "warmed
+ * up": it receives the live input with its output muted until the early part
+ * of the new response has built up, and only then are the two outputs
+ * crossfaded (scheduled on the audio clock). The listener hears the room
+ * morph, never an onset convolved with a burst of fresh reflections.
+ */
+const REVERB_WARMUP = 0.35; // s
+const REVERB_FADE = 0.08; // s
+
 class Reverb {
   constructor(ctx) {
     this.ctx = ctx;
@@ -256,31 +271,83 @@ class Reverb {
     this.hp = new FilterBank(ctx, 2, 'reverb-hp');
     this.merger.connect(this.hp.input);
     this.convs = [ctx.createConvolver(), ctx.createConvolver()];
-    this.gains = [ctx.createGain(), ctx.createGain()];
+    this.ins = [ctx.createGain(), ctx.createGain()];
+    this.outs = [ctx.createGain(), ctx.createGain()];
     this.output = ctx.createGain();
     this.convs.forEach((c, i) => {
       c.normalize = false;
-      this.hp.output.connect(c);
-      c.connect(this.gains[i]);
-      this.gains[i].gain.value = 0;
-      this.gains[i].connect(this.output);
+      this.ins[i].gain.value = 0;
+      this.outs[i].gain.value = 0;
+      this.hp.output.connect(this.ins[i]);
+      this.ins[i].connect(c);
+      c.connect(this.outs[i]);
+      this.outs[i].connect(this.output);
     });
     this.active = -1;
+    this.busyUntil = [0, 0]; // audio time until which each convolver may still be audible
+    this.pending = null;
+    this.timer = null;
     this.info = null;
   }
 
   setIR(ir) {
-    const buf = this.ctx.createBuffer(4, ir.length, ir.sampleRate);
-    ir.channels.forEach((ch, i) => buf.copyToChannel(ch, i));
+    this.pending = ir;
+    if (!this.timer) this._swap();
+  }
+
+  _swap() {
+    this.timer = null;
+    const ir = this.pending;
+    if (!ir) return;
+    const ctx = this.ctx;
     const next = this.active === 0 ? 1 : 0;
+    const now = ctx.currentTime;
+    const offline = immediateCtx(ctx);
+    if (!offline && now < this.busyUntil[next]) {
+      // The idle convolver is still part of a crossfade: try again after it.
+      this.timer = setTimeout(() => this._swap(), Math.max(20, (this.busyUntil[next] - now) * 1000 + 20));
+      return;
+    }
+    this.pending = null;
+    const buf = ctx.createBuffer(4, ir.length, ir.sampleRate);
+    ir.channels.forEach((ch, i) => buf.copyToChannel(ch, i));
+    const [gin, gout] = [this.ins[next].gain, this.outs[next].gain];
+    for (const g of [gin, gout]) g.cancelScheduledValues(0);
+    gout.value = 0;
+    gin.value = 1;
     this.convs[next].buffer = buf;
-    if (this.active < 0) {
-      this.gains[next].gain.value = 1;
+    if (offline || this.active < 0) {
+      gout.value = 1;
+      if (this.active >= 0) {
+        this.outs[this.active].gain.value = 0;
+        this.ins[this.active].gain.value = 0;
+      }
     } else {
-      crossfade(this.ctx, this.gains[this.active], this.gains[next], 0.08);
+      const t0 = now + REVERB_WARMUP;
+      const t1 = t0 + REVERB_FADE;
+      gout.setValueAtTime(0, now);
+      gout.setValueAtTime(0, t0);
+      gout.linearRampToValueAtTime(1, t1);
+      const prev = this.active;
+      const [pin, pout] = [this.ins[prev].gain, this.outs[prev].gain];
+      pout.cancelScheduledValues(now);
+      pout.setValueAtTime(pout.value, now);
+      pout.setValueAtTime(pout.value, t0);
+      pout.linearRampToValueAtTime(0, t1);
+      pin.cancelScheduledValues(now);
+      pin.setValueAtTime(1, now);
+      pin.setValueAtTime(0, t1 + 0.01);
+      this.busyUntil[prev] = t1 + 0.02;
+      this.busyUntil[next] = t1 + 0.02;
     }
     this.active = next;
     this.info = { rt60: ir.rt60, length: ir.length / ir.sampleRate, erCount: ir.erCount };
+  }
+
+  dispose() {
+    clearTimeout(this.timer);
+    this.timer = null;
+    this.pending = null;
   }
 }
 
@@ -823,6 +890,7 @@ export class SimulationEngine extends Emitter {
 
   dispose() {
     this.disposed = true;
+    this.reverb.dispose();
     clearInterval(this.meterTimer);
     clearTimeout(this.roomTimer);
     clearTimeout(this.irTimer);
