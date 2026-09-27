@@ -301,3 +301,28 @@ export function optimizeSubs(o) {
     refTrim,
   };
 }
+
+/**
+ * The smoothest bass spot of a heat map (with a per-point `std`) inside the
+ * listening area — in front of the speakers and away from the walls —
+ * gently preferring the centre line and the current seat.
+ * @param {{cols:number, rows:number, std:ArrayLike<number>}} hm
+ * @param {{room, speakers, listener}} s
+ */
+export function smoothestSeat(hm, s) {
+  const { width: W, depth: D } = s.room;
+  const zMin = Math.max(0.8, ...s.speakers.map((x) => x.z + 1.0));
+  let best = null;
+  for (let r = 0; r < hm.rows; r++) {
+    const z = ((r + 0.5) / hm.rows) * D;
+    if (z < zMin || z > D - 0.5) continue;
+    for (let c = 0; c < hm.cols; c++) {
+      const x = ((c + 0.5) / hm.cols) * W;
+      if (x < 0.6 || x > W - 0.6) continue;
+      const std = hm.std[r * hm.cols + c];
+      const score = std + 0.4 * Math.abs(x - W / 2) + 0.15 * Math.abs(z - s.listener.z);
+      if (!best || score < best.score) best = { x: Math.round(x * 100) / 100, z: Math.round(z * 100) / 100, std, score };
+    }
+  }
+  return best;
+}

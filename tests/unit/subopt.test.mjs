@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { optimizeSubs, seatPositions, candidatePositions, TransferBank, scoreResponses } from '../../src/acoustics/subopt.js';
+import { optimizeSubs, seatPositions, candidatePositions, TransferBank, scoreResponses, smoothestSeat } from '../../src/acoustics/subopt.js';
+import { computeHeatmap } from '../../src/acoustics/compute.js';
+import { octaveGrid } from '../../src/util/math.js';
 import { defaultState } from '../../src/core/settings.js';
 
 const s = defaultState();
@@ -61,4 +63,21 @@ test('settings-only mode keeps positions and still never gets worse', () => {
   assert.ok(r2.best.objective <= r2.before.objective + 1e-9);
   assert.deepEqual(r.best.subs.map((x) => [x.x, x.z]), current.map((x) => [x.x, x.z]));
   assert.ok(r.best.objective <= r.before.objective + 1e-9);
+});
+
+test('heat map reports unevenness and the smoothest seat lies in the listening area', () => {
+  const freqs = [...octaveGrid(25, 120, 12)];
+  const sub = s.subs[0];
+  const hm = computeHeatmap({ room: s.room, cols: 40, rows: 32, height: 1.15, freqs, sources: [{ pos: { x: sub.x, y: sub.y, z: sub.z }, re: freqs.map(() => 1), im: freqs.map(() => 0) }] });
+  assert.equal(hm.std.length, 40 * 32);
+  assert.ok([...hm.std].every((v) => v >= 0 && Number.isFinite(v)));
+  const spread = Math.max(...hm.std) - Math.min(...hm.std);
+  assert.ok(spread > 1, `unevenness varies across the room (${spread.toFixed(2)} dB)`);
+  const best = smoothestSeat(hm, s);
+  assert.ok(best.x >= 0.6 && best.x <= s.room.width - 0.6);
+  assert.ok(best.z >= Math.max(...s.speakers.map((x) => x.z)) + 1 - 1e-9 && best.z <= s.room.depth - 0.5);
+  // It is at least as smooth as the current seat.
+  const ci = Math.min(39, Math.floor((s.listener.x / s.room.width) * 40));
+  const ri = Math.min(31, Math.floor((s.listener.z / s.room.depth) * 32));
+  assert.ok(best.std <= hm.std[ri * 40 + ci] + 0.8);
 });

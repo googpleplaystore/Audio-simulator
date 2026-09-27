@@ -18,7 +18,7 @@ self.onmessage = (e) => {
       self.postMessage({ id, ok: true, result: optimizeSubs(job) });
     } else if (type === 'heatmap') {
       const res = computeHeatmap(job);
-      self.postMessage({ id, ok: true, result: res }, [res.data.buffer]);
+      self.postMessage({ id, ok: true, result: res }, [res.data.buffer, res.std.buffer]);
     } else {
       throw new Error(`Unknown job type ${type}`);
     }

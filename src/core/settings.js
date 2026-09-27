@@ -70,7 +70,7 @@ export function defaultState() {
     haptics: { enabled: false, intensity: 1, threshold: 0.5, gamepad: true, visual: true },
     viz: { spectrumMode: 'bars', spectrogramRange: 90, vuReference: -18 },
     scenes: [],
-    ui: { queueOpen: true, reduceMotion: false, heatmap: false, heatmapFreq: 'bass', showRays: true, snap: true, room3d: false },
+    ui: { queueOpen: true, reduceMotion: false, heatmap: false, heatmapMode: 'level', showRays: true, snap: true, room3d: false },
   };
 }
 

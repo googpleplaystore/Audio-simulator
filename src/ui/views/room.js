@@ -14,6 +14,7 @@ import {
   ROOM_PRESETS, roomFromPreset, defaultLayout, rt60Bands, schroederFrequency, criticalDistance, volume, meanAlpha, roomModes, boundaryGain, modalCrossover,
 } from '../../acoustics/room.js';
 import { makeSpeaker, makeSub } from '../../core/settings.js';
+import { smoothestSeat } from '../../acoustics/subopt.js';
 import { aimYaw } from '../../audio/plan.js';
 import { Response, cascadeMagnitudeDb } from '../../dsp/biquad.js';
 import { octaveGrid, clamp } from '../../util/math.js';
@@ -155,7 +156,7 @@ export function roomView(app, params, query, disposer) {
     }
     const plan = app.engine.plan;
     if (!plan) return;
-    const freqs = [...octaveGrid(25, 120, 6)];
+    const freqs = [...octaveGrid(25, 120, 12)];
     const sources = [];
     for (const src of plan.sources) {
       if (!src.active) continue;
@@ -175,21 +176,31 @@ export function roomView(app, params, query, disposer) {
     const ci = clamp(Math.floor((s.listener.x / s.room.width) * cols), 0, cols - 1);
     const ri = clamp(Math.floor((s.listener.z / s.room.depth) * rows), 0, rows - 1);
     const ref = res.data[ri * cols + ci];
+    const seatStd = res.std[ri * cols + ci];
     let min = Infinity;
     let max = -Infinity;
     for (const v of res.data) {
       min = Math.min(min, v);
       max = Math.max(max, v);
     }
-    editor.setHeatmap({ ...res, ref });
+    const best = smoothestSeat(res, s);
+    const mode = s.ui.heatmapMode === 'smooth' ? 'smooth' : 'level';
+    editor.setHeatmap({ ...res, ref, mode, best });
     clear(heatInfo);
+    const modeSeg = segmented([{ value: 'level', label: 'Level' }, { value: 'smooth', label: 'Smoothness' }], mode, (v) => store.set('ui.heatmapMode', v), { label: 'Heat map' });
     heatInfo.append(
-      h('div.heat-bar'),
-      h('div.split', h('span', '−12 dB'), h('span.grow', { style: { textAlign: 'center' } }, 'relative to your seat (25–120 Hz)'), h('span', '+12 dB')),
-      h('div.dim', `Range across room: ${(min - ref).toFixed(1)} … +${(max - ref).toFixed(1)} dB`),
+      modeSeg,
+      h('div.heat-bar', { class: mode === 'smooth' ? 'smooth' : '' }),
+      mode === 'smooth'
+        ? h('div.split', h('span', '±2 dB'), h('span.grow', { style: { textAlign: 'center' } }, 'bass unevenness 25–120 Hz'), h('span', '±10 dB'))
+        : h('div.split', h('span', '−12 dB'), h('span.grow', { style: { textAlign: 'center' } }, 'relative to your seat (25–120 Hz)'), h('span', '+12 dB')),
+      h('div.dim', mode === 'smooth' ? `Your seat: ±${seatStd.toFixed(1)} dB` : `Range across room: ${(min - ref).toFixed(1)} … +${(max - ref).toFixed(1)} dB`),
+      best && best.std < seatStd - 0.3
+        ? h('div.split', h('span', { style: { color: '#7cf0c8' } }, `Smoothest seat: ±${best.std.toFixed(1)} dB`), h('div.grow'), h('button.btn.small', { onClick: () => store.patch('listener', { x: best.x, z: best.z }) }, 'Move listener here'))
+        : h('div.dim', 'Your seat is already among the smoothest spots.'),
     );
   }, 200);
-  disposer.add(store.subscribe(['ui.heatmap', 'room', 'speakers', 'subs', 'listener', 'crossover', 'eq'], computeHeat));
+  disposer.add(store.subscribe(['ui.heatmap', 'ui.heatmapMode', 'room', 'speakers', 'subs', 'listener', 'crossover', 'eq'], computeHeat));
   computeHeat();
 
   // ------------------------------------------------ inspector

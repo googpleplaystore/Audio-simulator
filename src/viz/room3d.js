@@ -10,6 +10,7 @@ import { getHardware } from '../hardware/index.js';
 import { MATERIALS } from '../acoustics/materials.js';
 import { aimYaw, yawVector } from '../audio/plan.js';
 import { clamp } from '../util/math.js';
+import { heatCell } from './heatColors.js';
 
 const FOV = (50 * Math.PI) / 180;
 const NEAR = 0.05;
@@ -565,11 +566,25 @@ export class Room3D extends Emitter {
     const dz = room.depth / hm.rows;
     for (let r = 0; r < hm.rows; r++) {
       for (let c = 0; c < hm.cols; c++) {
-        const v = clamp((hm.data[r * hm.cols + c] - hm.ref) / 12, -1, 1);
-        const col = v >= 0 ? `rgba(${Math.round(60 + 195 * v)},${Math.round(60 + 90 * v)},60,0.55)` : `rgba(30,${Math.round(70 - 30 * v)},${Math.round(120 - 110 * v)},0.55)`;
+        const [cr, cg, cb] = heatCell(hm, r * hm.cols + c);
         const x = c * dx;
         const z = r * dz;
-        this._polygon(ctx, [v3(x, 0.002, z), v3(x + dx, 0.002, z), v3(x + dx, 0.002, z + dz), v3(x, 0.002, z + dz)], col, null);
+        this._polygon(ctx, [v3(x, 0.002, z), v3(x + dx, 0.002, z), v3(x + dx, 0.002, z + dz), v3(x, 0.002, z + dz)], `rgba(${Math.round(cr)},${Math.round(cg)},${Math.round(cb)},0.55)`, null);
+      }
+    }
+    if (hm.best) {
+      const ring = [];
+      for (let k = 0; k < 24; k++) {
+        const a = (k / 24) * Math.PI * 2;
+        ring.push(v3(hm.best.x + Math.cos(a) * 0.22, 0.004, hm.best.z + Math.sin(a) * 0.22));
+      }
+      this._polygon(ctx, ring, 'rgba(124,240,200,0.25)', '#7cf0c8', 2.5);
+      const lp = this.project(v3(hm.best.x, 0.35, hm.best.z));
+      if (lp) {
+        ctx.font = '700 11px Inter, system-ui, sans-serif';
+        ctx.fillStyle = '#7cf0c8';
+        ctx.textAlign = 'center';
+        ctx.fillText('best seat', lp[0], lp[1]);
       }
     }
   }

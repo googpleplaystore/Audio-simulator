@@ -7,19 +7,10 @@ import { MATERIALS } from '../acoustics/materials.js';
 import { boundaryGain, roomSpeedOfSound } from '../acoustics/room.js';
 import { aimYaw, yawVector } from '../audio/plan.js';
 import { clamp } from '../util/math.js';
+import { heatCell } from './heatColors.js';
 
 const MARGIN = 54;
 const HEAD_R = 0.14;
-
-function divergingColor(t) {
-  // t in [-1, 1]: blue (weak) → dark → orange/red (strong)
-  const a = clamp(t, -1, 1);
-  if (a < 0) {
-    const k = -a;
-    return [20 + 20 * (1 - k), 60 + 80 * k, 120 + 135 * k];
-  }
-  return [40 + 215 * a, 40 + 120 * a * (1 - a * 0.4), 60 * (1 - a)];
-}
 
 export class RoomEditor extends Emitter {
   constructor(canvas, app) {
@@ -60,10 +51,8 @@ export class RoomEditor extends Emitter {
       c.height = hm.rows;
       const g = c.getContext('2d');
       const img = g.createImageData(hm.cols, hm.rows);
-      const ref = hm.ref;
       for (let i = 0; i < hm.data.length; i++) {
-        const t = (hm.data[i] - ref) / 12;
-        const [r, gg, b] = divergingColor(t);
+        const [r, gg, b] = heatCell(hm, i);
         img.data[i * 4] = r;
         img.data[i * 4 + 1] = gg;
         img.data[i * 4 + 2] = b;
@@ -306,6 +295,24 @@ export class RoomEditor extends Emitter {
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(this.heatImg, x0, y0, x1 - x0, y1 - y0);
       ctx.restore();
+      const best = this.heatmap?.best;
+      if (best) {
+        // Suggested seat: pulsing ring.
+        const [bx, by] = this.px(best.x, best.z);
+        const pulse = 1 + 0.15 * Math.sin(t / 300);
+        ctx.beginPath();
+        ctx.arc(bx, by, 13 * pulse, 0, Math.PI * 2);
+        ctx.strokeStyle = '#7cf0c8';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([5, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.font = '700 11px Inter, system-ui, sans-serif';
+        ctx.fillStyle = '#7cf0c8';
+        ctx.textAlign = 'center';
+        ctx.fillText('best seat', bx, by - 20);
+        this.dirty = true; // keep the ring animating
+      }
     }
     // Grid
     ctx.lineWidth = 1;

@@ -310,9 +310,21 @@ await step('room: 3D view renders, drags objects and orbits', async () => {
   await page.waitForFunction(() => window.__audiospace.currentView?.editor?.constructor?.name === 'RoomEditor');
 });
 
-await step('room: bass heatmap renders', async () => {
+await step('room: bass heatmap, smoothness map and best-seat suggestion', async () => {
   await page.click('label.toggle:has-text("Bass heatmap")');
   await page.waitForSelector('.heat-legend:has-text("relative to your seat")', { timeout: 15000 });
+  await page.click('.heat-legend .segmented button:has-text("Smoothness")');
+  await page.waitForSelector('.heat-legend:has-text("bass unevenness")', { timeout: 15000 });
+  const hm = await evalApp(() => { const e = window.__audiospace.currentView.editor; return { mode: e.heatmap?.mode, best: e.heatmap?.best }; });
+  assert(hm.mode === 'smooth' && hm.best && Number.isFinite(hm.best.std), 'smoothness map with a best seat');
+  const move = page.locator('.heat-legend button:has-text("Move listener here")');
+  if (await move.count()) {
+    await move.click();
+    await wait(100);
+    const l = await evalApp(() => window.__audiospace.store.state.listener);
+    assert(Math.abs(l.x - hm.best.x) < 1e-6 && Math.abs(l.z - hm.best.z) < 1e-6, 'listener moved to the best seat');
+  }
+  await page.click('.heat-legend .segmented button:has-text("Level")');
 });
 
 await step('hardware: assign Klipsch RP-600M II to L+R', async () => {

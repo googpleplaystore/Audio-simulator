@@ -4,7 +4,7 @@ AudioSpace is a browser-based music player wrapped around a physically-modelled 
 
 Everything runs locally with the Web Audio API. Your music never leaves your device. No build step, no runtime dependencies.
 
-![Room simulator with bass heat map](docs/screenshots/room.png)
+![Room simulator with the bass smoothness map and best-seat suggestion](docs/screenshots/room.png)
 
 | | |
 |---|---|
@@ -52,7 +52,7 @@ AudioSpace must be served from `http://localhost` or HTTPS (secure context for t
 
   ![3D room view with bass heat map and first reflections](docs/screenshots/room3d.png)
 - **PannerNode** HRTF (or equal-power for speaker listening) with the inverse distance model (**inverse-square law**: −6 dB per doubling), propagation delay, off-axis high-frequency loss and air absorption.
-- **Low-frequency modal model**: a modal sum of the rectangular room's eigenmodes with wall-dependent damping, averaged over a head-sized region and fitted to a compact minimum-phase filter bank per source. It reproduces **corner loading** (+6…+9 dB), SBIR cancellations and standing waves; a **bass heat map** shows seat-to-seat variation. A simpler boundary-gain shelf model is available too.
+- **Low-frequency modal model**: a modal sum of the rectangular room's eigenmodes with wall-dependent damping, averaged over a head-sized region and fitted to a compact minimum-phase filter bank per source. It reproduces **corner loading** (+6…+9 dB), SBIR cancellations and standing waves; a **bass heat map** shows seat-to-seat level variation, and a **smoothness map** (spread of the 25–120 Hz response at every point) marks the smoothest seat in the listening area with one-click "Move listener here". A simpler boundary-gain shelf model is available too.
 - **Convolution reverb** from a synthesised **true-stereo impulse response**: image-source early reflections (order 1–5) with per-octave wall reflection coefficients, plus a diffuse tail per octave band decaying at the **Eyring RT60**, energy-calibrated to the statistical reverberant ratio 16π/R. Presets: Small Bedroom, Treated Studio, Vaulted-Ceiling Living Room, Home Theater, Concert Hall, Cathedral, Bathroom, Garage, Club, Office, Anechoic; materials include Glass, Bare Drywall, Heavy Curtains, Acoustic Foam, bass traps and more. IRs are generated in a Web Worker and hot-swapped with a crossfade.
 
 ### Phase 5 — Visualisation, haptics and export

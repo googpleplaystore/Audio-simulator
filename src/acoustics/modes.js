@@ -270,11 +270,14 @@ export function bassHeatmap(model, sources, opts = {}) {
   for (let k = 0; k <= maxNx; k++) for (let c = 0; c < cols; c++) tx[k * cols + c] = Math.cos((k * Math.PI * ((c + 0.5) / cols) * Lx) / Lx);
   for (let k = 0; k <= maxNz; k++) for (let r = 0; r < rows; r++) tz[k * rows + r] = Math.cos((k * Math.PI * ((r + 0.5) / rows) * Lz) / Lz);
   const data = new Float32Array(cols * rows);
+  const std = new Float32Array(cols * rows); // unevenness: std-dev of the dB response over freqs
   const psi = new Float64Array(n);
+  const db = new Float64Array(nf);
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       for (let i = 0; i < n; i++) psi[i] = tx[nx[i] * cols + c] * cosY[i] * tz[nz[i] * rows + r];
       let pw = 0;
+      let mean = 0;
       for (let fi = 0; fi < nf; fi++) {
         let sr = 0;
         let si = 0;
@@ -283,10 +286,17 @@ export function bassHeatmap(model, sources, opts = {}) {
           sr += Cr[base + i] * psi[i];
           si += Ci[base + i] * psi[i];
         }
-        pw += K * K * (sr * sr + si * si);
+        const p = K * K * (sr * sr + si * si);
+        pw += p;
+        db[fi] = 10 * Math.log10(p + 1e-20);
+        mean += db[fi];
       }
+      mean /= nf;
+      let v = 0;
+      for (let fi = 0; fi < nf; fi++) v += (db[fi] - mean) ** 2;
       data[r * cols + c] = 10 * Math.log10(pw / nf + 1e-20);
+      std[r * cols + c] = Math.sqrt(v / nf);
     }
   }
-  return { cols, rows, data, freqs: Array.from(freqs) };
+  return { cols, rows, data, std, freqs: Array.from(freqs) };
 }
