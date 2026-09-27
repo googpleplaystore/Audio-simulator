@@ -359,6 +359,50 @@ await step('true-peak limiter: realtime worklet attached, hot bake stays under t
   assert(res.sp > -6, `limiter should be working hard, got ${res.sp.toFixed(2)} dBFS`);
 });
 
+await step('measurements: sweep, analyses and sweep-based auto-EQ', async () => {
+  await page.goto(`${base}#/studio/measure`);
+  await page.click('button:has-text("Measure")');
+  await page.waitForSelector('.meas-item', { timeout: 60000 });
+  const s = await evalApp(() => {
+    const m = window.__audiospace.measurements.current;
+    return { spl: m.peakSpl, n: m.ir.length, fs: m.sampleRate, harm: m.harmonics.length };
+  });
+  assert(s.spl > 60 && s.spl < 130, `peak SPL ${s.spl}`);
+  assert(s.n > s.fs * 0.5 && s.harm === 4, 'IR and harmonic IRs captured');
+  for (const tab of ['Phase', 'Group delay', 'Impulse', 'Step', 'ETC', 'RT60', 'Waterfall', 'Distortion', 'SPL']) {
+    await page.click(`.meas-controls .segmented button:has-text("${tab}")`);
+    await wait(120);
+  }
+  const lit = await page.evaluate(() => {
+    const c = document.querySelector('.meas-plot canvas');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
+    return n;
+  });
+  assert(lit > 5000, `measurement plot drew ${lit} pixels`);
+  // Auto-EQ: measures, applies bounded correction, verifies.
+  await page.click('button:has-text("Auto-EQ from sweep")');
+  await page.waitForFunction(() => document.querySelectorAll('.meas-item').length >= 3, null, { timeout: 90000 });
+  const rc = await evalApp(async () => {
+    const { cascadeMagnitudeDb } = await import('/src/dsp/biquad.js');
+    const { octaveGrid } = await import('/src/util/math.js');
+    const st = window.__audiospace.store.state;
+    const db = cascadeMagnitudeDb(st.roomCorrection.filters, octaveGrid(10, 20000, 48), 48000);
+    return { on: st.roomCorrection.enabled, n: st.roomCorrection.filters.length, boost: Math.max(...db), limit: st.roomCorrection.maxBoost };
+  });
+  assert(rc.on && rc.n > 0, 'room correction applied');
+  assert(rc.boost <= rc.limit + 0.1, `correction cascade boost ${rc.boost.toFixed(2)} dB exceeds ${rc.limit} dB`);
+  // Measurements persist across reload.
+  await wait(400);
+  await page.reload();
+  await page.waitForFunction(() => window.__audiospace);
+  await page.goto(`${base}#/studio/measure`);
+  await page.waitForSelector('.meas-item', { timeout: 15000 });
+  assert((await page.locator('.meas-item').count()) >= 3, 'measurements persisted');
+  await evalApp(() => window.__audiospace.store.patch('roomCorrection', { enabled: false }));
+});
+
 await step('settings: speaker output switches panners to equal-power', async () => {
   await page.goto(`${base}#/settings`);
   await page.click('.segmented button:has-text("Speakers (equal-power)")');
@@ -379,7 +423,7 @@ await step('state and library persist across reload', async () => {
 });
 
 await step('every view renders without console errors', async () => {
-  for (const v of ['home', 'songs', 'albums', 'artists', 'genres', 'liked', 'playlists', 'now-playing', 'search?q=tone', 'studio/room', 'studio/hardware', 'studio/hardware/svs-pb-1000-pro', 'studio/receiver', 'studio/crossover', 'studio/eq', 'studio/analyzers', 'studio/bake', 'settings']) {
+  for (const v of ['home', 'songs', 'albums', 'artists', 'genres', 'liked', 'playlists', 'now-playing', 'search?q=tone', 'studio/room', 'studio/hardware', 'studio/hardware/svs-pb-1000-pro', 'studio/receiver', 'studio/crossover', 'studio/eq', 'studio/analyzers', 'studio/measure', 'studio/bake', 'settings']) {
     await page.goto(`${base}#/${v}`);
     await wait(250);
   }

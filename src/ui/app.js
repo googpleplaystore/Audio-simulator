@@ -84,6 +84,7 @@ export class App {
       { pattern: 'studio/crossover', name: 'crossover' },
       { pattern: 'studio/eq', name: 'eq' },
       { pattern: 'studio/analyzers', name: 'analyzers' },
+      { pattern: 'studio/measure', name: 'measure' },
       { pattern: 'studio/bake', name: 'bake' },
       { pattern: 'settings', name: 'settings' },
     ]);

@@ -101,6 +101,12 @@ class SourceChain {
     this.dir.connect(this.air);
     this.air.connect(this.panner);
     this.panner.connect(engine.dryBus);
+    // Virtual measurement microphone: omni, 1/r, no HRTF.
+    if (engine.micBus) {
+      this.micGain = ctx.createGain();
+      this.air.connect(this.micGain);
+      this.micGain.connect(engine.micBus);
+    }
     this.fade.connect(this.send);
     this.send.connect(this.sendL);
     this.send.connect(this.sendR);
@@ -155,6 +161,7 @@ class SourceChain {
       setParam(ctx, node.gain, spec.gain || 0, 0.03);
     }
     setPannerPosition(ctx, this.panner, p.pos, 0.04);
+    if (this.micGain) setParam(ctx, this.micGain.gain, REF_DISTANCE / Math.max(p.distance, REF_DISTANCE), 0.04);
     setParam(ctx, this.send.gain, p.sendGain);
     setParam(ctx, this.sendL.gain, p.sendL);
     setParam(ctx, this.sendR.gain, p.sendR);
@@ -210,7 +217,7 @@ class SourceChain {
   }
 
   dispose(immediate = false) {
-    const nodes = [this.in, this.trim, this.dcBlock, this.thermal, this.sens, this.align, this.fade, this.prop, this.dir, this.air, this.panner, this.send, this.sendL, this.sendR];
+    const nodes = [this.in, this.trim, this.dcBlock, this.thermal, this.sens, this.align, this.fade, this.prop, this.dir, this.air, this.panner, this.send, this.sendL, this.sendR, this.micGain].filter(Boolean);
     const finish = () => {
       for (const n of nodes) {
         try {
@@ -284,10 +291,12 @@ export class SimulationEngine extends Emitter {
    * @param {import('../acoustics/client.js').AcousticsClient} [opts.acoustics]
    * @param {boolean} [opts.offline]
    * @param {string} [opts.quality] 'high' | 'balanced' | 'eco'
+   * @param {boolean} [opts.mic] build a mono measurement-microphone output (`micOut`)
    */
-  constructor(ctx, { acoustics = null, offline = false, quality = 'balanced' } = {}) {
+  constructor(ctx, { acoustics = null, offline = false, quality = 'balanced', mic = false } = {}) {
     super();
     this.ctx = ctx;
+    this.wantMic = mic;
     this.acoustics = acoustics;
     this.offline = offline;
     this.quality = quality;
@@ -387,6 +396,18 @@ export class SimulationEngine extends Emitter {
     this.wet.connect(this.simSum);
     this.monitorCal = g();
     this.simSum.connect(this.monitorCal);
+    if (this.wantMic) {
+      // Mono omni mic at the seat, in SPL units (1.0 ≙ 100 dB): direct sound
+      // of every source plus the diffuse field of the left-ear reverb.
+      this.micBus = monoGain(ctx);
+      this.micShelf = new FilterBank(ctx, 1, 'mic-boundary');
+      this.micBus.connect(this.micShelf.input);
+      this.micOut = monoGain(ctx);
+      this.micShelf.output.connect(this.micOut);
+      const wetSplit = ctx.createChannelSplitter(2);
+      this.wet.connect(wetSplit);
+      wetSplit.connect(this.micOut, 0);
+    }
     this.simX = g(1);
     this.monitorCal.connect(this.simX);
 
@@ -601,6 +622,7 @@ export class SimulationEngine extends Emitter {
       if (bg.gainDb > 0.1) lshelf = [{ type: 'lowshelf', frequency: bg.cornerFreq, gain: bg.gainDb * 0.5 }];
     }
     this.listenerShelf.set(lshelf);
+    this.micShelf?.set(lshelf);
     // Simulation vs direct
     this._setSimulation(plan.simulation);
     // Volume

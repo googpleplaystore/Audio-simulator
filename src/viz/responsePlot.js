@@ -145,6 +145,10 @@ export class ResponsePlot {
       for (let i = 0; i < c.freqs.length; i++) {
         const f = c.freqs[i];
         if (f < this.fMin * 0.9 || f > this.fMax * 1.1) continue;
+        if (!Number.isFinite(c.db[i])) {
+          started = false; // NaN breaks the line (e.g. phase wraps)
+          continue;
+        }
         const x = this.x(f, w);
         const y = this.y(clamp(c.db[i], this.dbMin - 40, this.dbMax + 40), h);
         if (!started) {

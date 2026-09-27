@@ -40,6 +40,7 @@ export function createSidebar(app) {
       nav('studio/crossover', 'crossover', 'Crossover', { match: ['crossover'], desktopOnly: true }),
       nav('studio/eq', 'eq', 'Equalizer', { match: ['eq'] }),
       nav('studio/analyzers', 'spectrum', 'Analyzers', { match: ['analyzers'] }),
+      nav('studio/measure', 'mic', 'Measurements', { match: ['measure'], desktopOnly: true }),
       nav('studio/bake', 'bake', 'Bake & Export', { match: ['bake'], desktopOnly: true }),
       h('div.nav-section', h('span', 'Playlists'), h('button.icon-btn.small', { 'data-tip': 'Create playlist', 'aria-label': 'Create playlist', onClick: () => app.newPlaylist() }, icon('plus', 16))),
       playlistsEl,

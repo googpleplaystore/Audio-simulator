@@ -9,6 +9,7 @@ import { receiverView } from './receiver.js';
 import { crossoverView } from './crossover.js';
 import { eqView } from './eq.js';
 import { analyzersView, bakeView, settingsView, nowPlayingView } from './studio.js';
+import { measureView } from './measure.js';
 
 export const VIEWS = {
   home: homeView,
@@ -31,6 +32,7 @@ export const VIEWS = {
   crossover: crossoverView,
   eq: eqView,
   analyzers: analyzersView,
+  measure: measureView,
   bake: bakeView,
   settings: settingsView,
 };

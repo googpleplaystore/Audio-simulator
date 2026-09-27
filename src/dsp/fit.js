@@ -44,7 +44,14 @@ export function fitFilters(freqs, targetDb, opts = {}) {
     shelf = false, // fit a low-shelf first to capture broadband offset
     shelfFreq = null,
     weights = null,
+    poleQMax = null, // (f) => max pole Q of a boost (limits ringing, e.g. to physical modal damping)
   } = opts;
+  // A peaking boost of gain G has poles with Q·A (A = 10^(G/40)); cap it.
+  const limitQ = (spec) => {
+    if (!poleQMax || spec.type !== 'peaking' || !(spec.gain > 0)) return spec;
+    const qCap = Math.max(qMin, poleQMax(spec.frequency) / Math.pow(10, spec.gain / 40));
+    return spec.Q > qCap ? { ...spec, Q: qCap } : spec;
+  };
   const n = freqs.length;
   let lo = 0;
   while (lo < n - 1 && freqs[lo] < fMin) lo++;
@@ -54,6 +61,16 @@ export function fitFilters(freqs, targetDb, opts = {}) {
   const w = weights ? Float64Array.from(weights) : new Float64Array(n).fill(1);
   const cand = new Float64Array(n);
   const filters = [];
+  // Running cascade response: maxBoost/maxCut limit the *cascade*, not just
+  // each filter, so overlapping boosts can never stack beyond the limit.
+  const total = new Float64Array(n);
+  const withinLimits = (c) => {
+    for (let i = 0; i < n; i++) {
+      const v = total[i] + c[i];
+      if (v > maxBoost + 0.01 || v < -maxCut - 0.01) return false;
+    }
+    return true;
+  };
 
   if (shelf && hi > lo) {
     // Broadband offset below shelfFreq captured by a low shelf.
@@ -77,13 +94,16 @@ export function fitFilters(freqs, targetDb, opts = {}) {
         if (!best || e < best.e) best = { e, spec };
       }
       specDbOnGrid(best.spec, freqs, sampleRate, cand);
-      for (let i = 0; i < n; i++) residual[i] -= cand[i];
+      for (let i = 0; i < n; i++) {
+        residual[i] -= cand[i];
+        total[i] += cand[i];
+      }
       filters.push(best.spec);
     }
   }
 
-  const maxPeaking = maxFilters - filters.length;
-  for (let k = 0; k < maxPeaking; k++) {
+  // Skipped points (no headroom, no improvement) cost attempts, not filters.
+  for (let attempt = 0; filters.length < maxFilters && attempt < maxFilters * 8; attempt++) {
     // Largest weighted deviation.
     let idx = -1;
     let maxAbs = 0;
@@ -96,8 +116,12 @@ export function fitFilters(freqs, targetDb, opts = {}) {
     }
     if (idx < 0 || maxAbs < tolerance) break;
     const peak = residual[idx];
-    let gain = clamp(peak, -maxCut, maxBoost);
-    if (Math.abs(gain) < tolerance * 0.5) break;
+    let gain = clamp(peak, -maxCut - total[idx], maxBoost - total[idx]);
+    if (Math.abs(gain) < tolerance * 0.5) {
+      // No headroom left here: stop chasing this point.
+      w[idx] *= 0.25;
+      continue;
+    }
     // Estimate bandwidth from half-gain crossings.
     const half = peak / 2;
     let l = idx;
@@ -109,14 +133,20 @@ export function fitFilters(freqs, targetDb, opts = {}) {
     let q = clamp(f0 / bw, qMin, qMax);
 
     // Local refinement: coordinate search over frequency, Q and gain.
-    let best = { spec: { type: 'peaking', frequency: f0, Q: q, gain }, e: Infinity };
-    specDbOnGrid(best.spec, freqs, sampleRate, cand);
-    best.e = weightedError(residual, cand, w, lo, hi);
-    const tryCand = (spec) => {
+    let best = { spec: null, e: Infinity };
+    const tryCand = (raw) => {
+      const spec = limitQ(raw);
       specDbOnGrid(spec, freqs, sampleRate, cand);
+      if (!withinLimits(cand)) return;
       const e = weightedError(residual, cand, w, lo, hi);
       if (e < best.e) best = { spec, e };
     };
+    // Start from the estimate, backing the gain off until the cascade fits.
+    for (let g = gain, tries = 0; tries < 12 && !best.spec; tries++, g *= 0.8) tryCand({ type: 'peaking', frequency: f0, Q: q, gain: g });
+    if (!best.spec) {
+      w[idx] *= 0.25;
+      continue;
+    }
     for (let pass = 0; pass < 3; pass++) {
       const s = best.spec;
       const scale = 1 / (pass + 1);
@@ -140,7 +170,10 @@ export function fitFilters(freqs, targetDb, opts = {}) {
       continue;
     }
     specDbOnGrid(best.spec, freqs, sampleRate, cand);
-    for (let i = 0; i < n; i++) residual[i] -= cand[i];
+    for (let i = 0; i < n; i++) {
+      residual[i] -= cand[i];
+      total[i] += cand[i];
+    }
     q = best.spec.Q;
     gain = best.spec.gain;
     filters.push({ type: 'peaking', frequency: best.spec.frequency, Q: q, gain });

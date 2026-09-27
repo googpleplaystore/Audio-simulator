@@ -14,7 +14,7 @@ function clone(o) {
 }
 
 /** State with all user EQ disabled — what the room correction "measures". */
-function measurementState(state) {
+export function measurementState(state) {
   const s = clone(state);
   s.eq.graphic.enabled = false;
   s.eq.parametric.enabled = false;
@@ -36,13 +36,29 @@ export function measure(state, { roomFilters = {}, sampleRate = 48000, userEq = 
   return { freqs: MEASURE_FREQS, raw: raw.map((v) => v - ref), smoothed: sm.map((v) => v - ref), plan };
 }
 
+/** Resample a swept measurement ({freqs, db}) onto MEASURE_FREQS, smoothed and normalised. */
+function fromMeasured(measured) {
+  const { freqs, db } = measured;
+  const raw = new Float64Array(MEASURE_FREQS.length);
+  let j = 0;
+  for (let i = 0; i < MEASURE_FREQS.length; i++) {
+    const f = MEASURE_FREQS[i];
+    while (j < freqs.length - 2 && freqs[j + 1] < f) j++;
+    const t = clamp(Math.log(f / freqs[j]) / Math.log(freqs[j + 1] / freqs[j]), 0, 1);
+    raw[i] = db[j] * (1 - t) + db[j + 1] * t;
+  }
+  const sm = smoothVariable(MEASURE_FREQS, raw);
+  const ref = bandMeanDb(MEASURE_FREQS, sm, 300, 3000);
+  return { freqs: MEASURE_FREQS, raw: raw.map((v) => v - ref), smoothed: sm.map((v) => v - ref) };
+}
+
 /**
  * Compute room correction filters that pull the measured response toward the
  * selected target curve within [fMin, fMax].
  */
-export function computeRoomCorrection(state, { roomFilters = {}, sampleRate = 48000 } = {}) {
+export function computeRoomCorrection(state, { roomFilters = {}, sampleRate = 48000, measured = null } = {}) {
   const rc = state.roomCorrection;
-  const m = measure(state, { roomFilters, sampleRate });
+  const m = measured ? fromMeasured(measured) : measure(state, { roomFilters, sampleRate });
   const tgtFn = targetCurve(rc.target).fn;
   const freqs = m.freqs;
   const tgt = Array.from(freqs, (f) => tgtFn(f));

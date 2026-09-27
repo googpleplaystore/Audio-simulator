@@ -57,11 +57,23 @@ AudioSpace must be served from `http://localhost` or HTTPS (secure context for t
 - **Haptics**: sub-bass transients drive `navigator.vibrate` on phones and dual-rumble on connected gamepads, with a visual pulse on desktop.
 - **Bake**: render any track through the full simulation with `OfflineAudioContext` to 16-bit (TPDF dither), 24-bit or 32-bit float WAV at 44.1/48/96 kHz, with progress; export/import DSP profiles; export the room's 4-channel impulse response; record the live output to WAV via an AudioWorklet.
 
+### Phase 6 — Output protection and hygiene
+- **True-peak lookahead limiter** (AudioWorklet): 4× oversampled inter-sample peak detection, 2.5 ms look-ahead, hold and release, adjustable ceiling (−0.1…−6 dBTP), used in realtime and by the offline bake, which reports sample and true peak and can normalise to −1 dBTP.
+- Room-correction and room-emulation EQ fits respect their boost/cut limits for the **whole cascade** (overlapping filters can no longer stack past the limit), and fitted modal boosts may not ring longer than the room's physical modal damping allows.
+- Plots release their observers when views and dialogs close.
+
+### Phase 7 — Virtual acoustic measurements ("REW in the browser")
+![Measurements: waterfall of a vaulted living room](docs/screenshots/measure.png)
+
+- An **exponential sine sweep** (Farina) is rendered through the complete simulation — EQ, crossover, amplifiers, drivers, room modes, reverb — to a virtual omni **measurement microphone** at the seat, then deconvolved into the impulse response plus separate **harmonic impulse responses**.
+- Graphs: **SPL** (with ⅟₄₈…⅓-octave or psychoacoustic smoothing, 500 ms in-room to 5 ms quasi-anechoic windows), **phase**, **group delay**, **impulse**, **step**, **energy-time curve**, **RT60 per octave** (EDT, T20, T30, C50, C80, ISO 3382 style), **waterfall / cumulative spectral decay** (bass with an adaptive span, or full range) and **harmonic distortion** (H2…H5 and THD vs. frequency — push a 10 W amp and watch it rise).
+- Overlays of up to 12 stored measurements (persisted in IndexedDB), renaming, **REW-compatible text export** (freq, SPL, phase) and **impulse-response WAV** export.
+- **Auto-EQ from sweep**: measures with EQ bypassed, fits room-correction filters to the measured response, applies them and verifies with a second sweep.
+
 ### Robustness
 - AudioContext unlock on first gesture and recovery after OS interruptions; decks' `MediaElementSourceNode`s are created once; object URLs revoked on unload.
 - Click-free parameter changes everywhere (`setTargetAtTime` smoothing, declicked filter-type switches, crossfaded A/B bypass and IR swaps) — no pops when dragging EQ sliders or speakers.
 - A/B **bypass** with automatic level matching (`B`), PWA manifest + service worker.
-- **True-peak output limiter** (AudioWorklet): 4× oversampled inter-sample peak detection, 2.5 ms look-ahead, hold and release, adjustable ceiling (−0.1…−6 dBTP). Used in realtime and by the offline bake, which reports sample and true peak and can normalise to −1 dBTP.
 
 ## Keyboard shortcuts
 
@@ -70,7 +82,7 @@ AudioSpace must be served from `http://localhost` or HTTPS (secure context for t
 ## Development
 
 ```bash
-npm test             # unit tests (node:test): DSP maths, limiter, acoustics, hardware DB, tag parsers, queue, signal plan
+npm test             # unit tests (node:test): DSP maths, limiter, measurement analysis, acoustics, hardware DB, tag parsers, queue, signal plan
 npm run test:e2e     # end-to-end scenarios in headless Chromium (Playwright)
 npm run lint         # ESLint
 ```
@@ -85,8 +97,9 @@ src/
   library/     tag parsers, importer, IndexedDB library model, artwork, waveforms, demo synthesis
   player/      queue model, dual-deck player
   audio/       plan (state → every parameter), engine (Web Audio graph), predict (virtual mic),
-               calibration (auto-EQ/auto setup), bake/recorder, haptics, WAV codec
-  viz/         canvas loop, response plots, analyzers, room editor
+               calibration (auto-EQ/auto setup), measure (sweep measurements), bake/recorder,
+               worklets (true-peak limiter, recorder), haptics, WAV codec
+  viz/         canvas loop, response/XY/waterfall/bar plots, analyzers, room editor
   ui/          app controller, router, shell, components, views
 ```
 

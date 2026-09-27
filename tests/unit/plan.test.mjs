@@ -6,6 +6,8 @@ import { computeRoomCorrection, autoSetup, measure } from '../../src/audio/calib
 import { defaultState, migrateState } from '../../src/core/settings.js';
 import { computeRoomFilters } from '../../src/acoustics/compute.js';
 import { octaveGrid } from '../../src/util/math.js';
+import { cascadeMagnitudeDb } from '../../src/dsp/biquad.js';
+import { fitFilters } from '../../src/dsp/fit.js';
 
 const clone = (o) => JSON.parse(JSON.stringify(o));
 
@@ -79,8 +81,22 @@ test('room correction reduces deviation from target within its band', () => {
   }).results;
   const res = computeRoomCorrection(s, { roomFilters: rf });
   assert.ok(res.filters.length > 0);
-  assert.ok(res.errorAfter < res.errorBefore * 0.8, `${res.errorBefore} -> ${res.errorAfter}`);
-  for (const f of res.filters) assert.ok(f.gain <= s.roomCorrection.maxBoost + 1e-9 && f.gain >= -s.roomCorrection.maxCut - 1e-9);
+  // Deep modal nulls cannot be filled within the boost limit, so the gain is
+  // bounded; what must hold is a clear improvement within the limits.
+  assert.ok(res.errorAfter < res.errorBefore * 0.85, `${res.errorBefore} -> ${res.errorAfter}`);
+  const cascade = cascadeMagnitudeDb(res.filters, octaveGrid(10, 24000, 48), 48000);
+  assert.ok(Math.max(...cascade) <= s.roomCorrection.maxBoost + 0.05, `cascade boost ${Math.max(...cascade)}`);
+  assert.ok(Math.min(...cascade) >= -s.roomCorrection.maxCut - 0.05, `cascade cut ${Math.min(...cascade)}`);
+});
+
+test('EQ fitting never stacks filters beyond the boost limit', () => {
+  const freqs = octaveGrid(20, 20000, 24);
+  // A deep, wide dip asks for far more boost than allowed.
+  const target = freqs.map((f) => 15 * Math.exp(-(Math.log2(f / 60) ** 2) * 4));
+  const fit = fitFilters(freqs, target, { maxFilters: 10, maxBoost: 3, maxCut: 12 });
+  const cascade = cascadeMagnitudeDb(fit.filters, freqs, 48000);
+  assert.ok(Math.max(...cascade) <= 3.05, `cascade ${Math.max(...cascade)}`);
+  assert.ok(Math.max(...cascade) > 2.5, 'uses the available boost');
 });
 
 test('auto setup levels channels and picks a crossover', () => {

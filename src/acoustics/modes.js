@@ -185,6 +185,29 @@ export function roomFilterTarget(model, src, lis, freqs, crossover) {
  * Fit a compact biquad bank emulating the modal room response for one
  * source→listener pair.
  */
+/**
+ * Physical modal Q at frequency f: ω/(2δ) of the least-damped mode within
+ * ±⅓ octave (or the nearest mode). Fitted boosts may not ring longer.
+ */
+export function modalQ(model, f) {
+  const { n, w2, delta } = model;
+  let best = Infinity;
+  let nearest = Infinity;
+  let nearestD = 0;
+  for (let i = 0; i < n; i++) {
+    if (w2[i] <= 0) continue;
+    const fn = Math.sqrt(w2[i]) / (2 * Math.PI);
+    const dist = Math.abs(Math.log2(fn / f));
+    if (dist <= 1 / 3 && delta[i] < best) best = delta[i];
+    if (dist < nearest) {
+      nearest = dist;
+      nearestD = delta[i];
+    }
+  }
+  const d = Number.isFinite(best) ? best : nearestD || 10;
+  return (Math.PI * f) / d;
+}
+
 export function fitRoomFilters(model, src, lis, opts = {}) {
   const crossover = opts.crossover ?? modalCrossover(model.room);
   const fTop = Math.min(crossover * 1.8, 600);
@@ -202,6 +225,7 @@ export function fitRoomFilters(model, src, lis, opts = {}) {
     tolerance: 0.75,
     shelf: true,
     shelfFreq: crossover * 0.8,
+    poleQMax: (f) => modalQ(model, f),
   });
   return { filters: res.filters, freqs, target, rmsErrorDb: res.rmsErrorDb, crossover };
 }
