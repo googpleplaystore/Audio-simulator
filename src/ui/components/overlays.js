@@ -49,7 +49,10 @@ export function modal(render, { wide = false, dismissable = true, label = 'Dialo
       openModals--;
       document.removeEventListener('keydown', onKey, true);
       backdrop.remove();
-      if (prevFocus && prevFocus.focus) prevFocus.focus();
+      // Restore focus after the current key event has finished; restoring it
+      // synchronously lets the Enter that closed a prompt activate the
+      // button that opened it (reopening the dialog).
+      if (prevFocus && prevFocus.focus) setTimeout(() => prevFocus.isConnected && prevFocus.focus(), 0);
       resolve(value);
     };
     const onKey = (e) => {
@@ -103,7 +106,10 @@ export function promptDialog(title, { value = '', placeholder = '', ok = 'Save',
   return modal((close) => {
     const input = h('input.input', { value, placeholder, style: { width: '100%' }, autofocus: true });
     input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') close(input.value.trim());
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        close(input.value.trim());
+      }
     });
     return h(
       'div',

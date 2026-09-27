@@ -627,7 +627,8 @@ export class SimulationEngine extends Emitter {
     this._setSimulation(plan.simulation);
     // Volume
     const pl = state.player;
-    const vol = pl.muted ? 0 : Math.pow(clamp(pl.volume ?? 0.8, 0, 1), 2);
+    // engine.trimDb: temporary level trim (e.g. level-matched blind tests).
+    const vol = pl.muted ? 0 : Math.pow(clamp(pl.volume ?? 0.8, 0, 1), 2) * dbToGain(clamp(state.engine.trimDb || 0, -30, 0));
     setParam(ctx, this.volume.gain, vol, 0.02);
     this._setLimiter(state.engine.limiter !== false, clamp(state.engine.ceilingDb ?? -1, -12, 0));
     this._reconcileSources(plan);

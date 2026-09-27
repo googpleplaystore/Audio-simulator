@@ -32,7 +32,7 @@ export function defaultState() {
   return {
     version: STATE_VERSION,
     player: { volume: 0.8, muted: false, crossfade: 0, gapless: true, replayGain: 'track', replayGainPreampDb: 0, rate: 1 },
-    engine: { simulation: true, output: 'headphones', quality: 'balanced', levelMatch: true, limiter: true, ceilingDb: -1 },
+    engine: { simulation: true, output: 'headphones', quality: 'balanced', levelMatch: true, limiter: true, ceilingDb: -1, trimDb: 0 },
     receiver: {
       preset: 'denon-avr-s760h',
       wattsPerChannel: 75,
@@ -69,6 +69,7 @@ export function defaultState() {
     subs: [{ ...makeSub('sub-1', lay.sub), trimDb: 4 }],
     haptics: { enabled: false, intensity: 1, threshold: 0.5, gamepad: true, visual: true },
     viz: { spectrumMode: 'bars', spectrogramRange: 90, vuReference: -18 },
+    scenes: [],
     ui: { queueOpen: true, reduceMotion: false, heatmap: false, heatmapFreq: 'bass', showRays: true, snap: true },
   };
 }

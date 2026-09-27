@@ -1,8 +1,9 @@
 // Client for the acoustics worker with latest-wins semantics per job channel
 // and a synchronous main-thread fallback when workers are unavailable.
 import { computeRoomFilters, computeHeatmap, computeIR } from './compute.js';
+import { optimizeSubs } from './subopt.js';
 
-const RUNNERS = { ir: computeIR, roomFilters: computeRoomFilters, heatmap: computeHeatmap };
+const RUNNERS = { ir: computeIR, roomFilters: computeRoomFilters, heatmap: computeHeatmap, subOptimize: optimizeSubs };
 
 export class AcousticsClient {
   constructor() {

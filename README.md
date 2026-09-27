@@ -70,6 +70,15 @@ AudioSpace must be served from `http://localhost` or HTTPS (secure context for t
 - Overlays of up to 12 stored measurements (persisted in IndexedDB), renaming, **REW-compatible text export** (freq, SPL, phase) and **impulse-response WAV** export.
 - **Auto-EQ from sweep**: measures with EQ bypassed, fits room-correction filters to the measured response, applies them and verifies with a second sweep.
 
+### Phase 8 — Multi-sub optimiser, scenes and blind testing
+| | |
+|---|---|
+| ![Bass optimiser](docs/screenshots/bass.png) | ![Scenes and ABX](docs/screenshots/compare.png) |
+
+- **Bass Optimizer**: searches subwoofer positions (corners, mid-walls, quarter points), delays, polarity and levels for 1–4 subs to minimise the **seat-to-seat bass variation** over a sofa or two rows, then the unevenness of the average (what EQ can fix) — in the spirit of Welti's research and MSO. It uses the modal room model at every seat (head-region averaged), includes the receiver's automatic time alignment, runs in a Web Worker, and shows per-seat responses before/after, the top layouts and a room plan. It rediscovers the classics: one sub at the front-wall centre, two at the ¼/¾ points, four at the corners and mid-walls.
+- **Scenes**: save complete systems (speakers, subs, room, receiver, crossover, EQ, room correction) and recall them instantly; example scenes included.
+- **ABX blind test**: compare two scenes with randomised, balanced X assignments, predicted-loudness level matching (never boosting), keyboard control and a binomial p-value at the end; your original system is restored afterwards.
+
 ### Robustness
 - AudioContext unlock on first gesture and recovery after OS interruptions; decks' `MediaElementSourceNode`s are created once; object URLs revoked on unload.
 - Click-free parameter changes everywhere (`setTargetAtTime` smoothing, declicked filter-type switches, crossfaded A/B bypass and IR swaps) — no pops when dragging EQ sliders or speakers.
@@ -92,7 +101,8 @@ npm run lint         # ESLint
 ```
 src/
   dsp/         biquad maths identical to the Web Audio spec, LR crossovers, FFT, EQ fitting, curves/presets
-  acoustics/   materials, Eyring/Sabine, room modes + modal sum, boundary gain, image-source IR synthesis, worker
+  acoustics/   materials, Eyring/Sabine, room modes + modal sum, boundary gain, image-source IR synthesis,
+               multi-sub optimiser, worker
   hardware/    seed specs, extrapolation engine, brand voicing, receivers, response model
   library/     tag parsers, importer, IndexedDB library model, artwork, waveforms, demo synthesis
   player/      queue model, dual-deck player
@@ -100,6 +110,7 @@ src/
                calibration (auto-EQ/auto setup), measure (sweep measurements), bake/recorder,
                worklets (true-peak limiter, recorder), haptics, WAV codec
   viz/         canvas loop, response/XY/waterfall/bar plots, analyzers, room editor
+  core/        store, settings/migration, IndexedDB, scenes + ABX statistics
   ui/          app controller, router, shell, components, views
 ```
 

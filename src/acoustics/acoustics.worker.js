@@ -1,6 +1,7 @@
 // Web Worker hosting the heavy acoustics computations so the UI and audio
 // thread stay smooth while the user drags speakers around.
 import { computeRoomFilters, computeHeatmap, computeIR } from './compute.js';
+import { optimizeSubs } from './subopt.js';
 
 self.onmessage = (e) => {
   const { id, type, job } = e.data;
@@ -13,6 +14,8 @@ self.onmessage = (e) => {
       );
     } else if (type === 'roomFilters') {
       self.postMessage({ id, ok: true, result: computeRoomFilters(job) });
+    } else if (type === 'subOptimize') {
+      self.postMessage({ id, ok: true, result: optimizeSubs(job) });
     } else if (type === 'heatmap') {
       const res = computeHeatmap(job);
       self.postMessage({ id, ok: true, result: res }, [res.data.buffer]);

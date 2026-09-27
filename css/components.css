@@ -492,9 +492,11 @@
 
 .segmented {
   display: inline-flex;
+  flex-wrap: wrap; /* wrap instead of overflowing narrow cards */
+  max-width: 100%;
   background: var(--bg-3);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 18px;
   padding: 3px;
   gap: 2px;
 }
@@ -1193,6 +1195,8 @@
 
 .stack {
   display: grid;
+  /* A shrinkable column: long no-wrap rows ellipsize instead of widening the stack. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
 }
 

@@ -85,6 +85,8 @@ export class App {
       { pattern: 'studio/eq', name: 'eq' },
       { pattern: 'studio/analyzers', name: 'analyzers' },
       { pattern: 'studio/measure', name: 'measure' },
+      { pattern: 'studio/bass', name: 'bass' },
+      { pattern: 'studio/compare', name: 'compare' },
       { pattern: 'studio/bake', name: 'bake' },
       { pattern: 'settings', name: 'settings' },
     ]);

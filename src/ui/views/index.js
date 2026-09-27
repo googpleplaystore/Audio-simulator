@@ -10,6 +10,8 @@ import { crossoverView } from './crossover.js';
 import { eqView } from './eq.js';
 import { analyzersView, bakeView, settingsView, nowPlayingView } from './studio.js';
 import { measureView } from './measure.js';
+import { bassView } from './bass.js';
+import { compareView } from './compare.js';
 
 export const VIEWS = {
   home: homeView,
@@ -33,6 +35,8 @@ export const VIEWS = {
   eq: eqView,
   analyzers: analyzersView,
   measure: measureView,
+  bass: bassView,
+  compare: compareView,
   bake: bakeView,
   settings: settingsView,
 };

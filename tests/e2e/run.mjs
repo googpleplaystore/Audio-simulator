@@ -403,6 +403,59 @@ await step('measurements: sweep, analyses and sweep-based auto-EQ', async () => 
   await evalApp(() => window.__audiospace.store.patch('roomCorrection', { enabled: false }));
 });
 
+await step('bass optimizer: two subs for the sofa, applied to the room', async () => {
+  await page.goto(`${base}#/studio/bass`);
+  await page.click('.segmented button:has-text("2")');
+  await page.click('button:has-text("Optimise")');
+  await page.waitForSelector('.alt-item', { timeout: 60000 });
+  const txt = await page.textContent('.mini-stats');
+  assert(/→/.test(txt), 'before → after stats shown');
+  const before = await evalApp(() => window.__audiospace.store.state.subs.length);
+  await page.click('button:has-text("Apply to room")');
+  await wait(200);
+  const subs = await evalApp(() => window.__audiospace.store.state.subs.filter((s) => !s.muted));
+  assert(subs.length === 2 && before >= 1, `subs after apply: ${subs.length}`);
+  assert(subs.every((s) => Number.isFinite(s.x) && Number.isFinite(s.z) && s.delayMs >= 0), 'valid sub settings');
+});
+
+await step('scenes and a complete ABX blind test restore the original system', async () => {
+  await page.goto(`${base}#/studio/compare`);
+  await page.click('button:has-text("Add example scenes")');
+  await page.waitForSelector('.scene-item');
+  assert((await page.locator('.scene-item').count()) === 3, 'three example scenes');
+  const original = await evalApp(() => JSON.stringify([window.__audiospace.store.state.speakers, window.__audiospace.store.state.room.preset, window.__audiospace.store.state.receiver.masterDb]));
+  const ids = await evalApp(() => window.__audiospace.store.state.scenes.map((s) => s.id));
+  await page.selectOption('select[aria-label="Scene A"]', ids[0]);
+  await page.selectOption('select[aria-label="Scene B"]', ids[1]);
+  await page.click('.segmented button:has-text("10")');
+  await page.click('button:has-text("Start blind test")');
+  await page.waitForSelector('.abx-btn');
+  const aRoom = await evalApp(() => window.__audiospace.store.state.room.preset);
+  assert(aRoom === 'bedroom', `A is active (${aRoom})`);
+  await page.click('.abx-btn:has-text("B")');
+  assert((await evalApp(() => window.__audiospace.store.state.room.preset)) === 'studio', 'B switches the room');
+  const trim = await evalApp(() => window.__audiospace.store.state.engine.trimDb);
+  assert(trim <= 0, 'level matching never boosts');
+  for (let i = 0; i < 10; i++) {
+    await page.click('.abx-btn:has-text("X")');
+    await page.keyboard.press(i % 2 ? '1' : '2');
+    await wait(30);
+  }
+  await page.waitForSelector('.abx-score');
+  const score = await page.textContent('.abx-score');
+  assert(/\d+ \/ 10/.test(score), `score ${score}`);
+  const restored = await evalApp(() => JSON.stringify([window.__audiospace.store.state.speakers, window.__audiospace.store.state.room.preset, window.__audiospace.store.state.receiver.masterDb]));
+  assert(restored === original, 'original system restored after the test');
+  assert((await evalApp(() => window.__audiospace.store.state.engine.trimDb)) === 0, 'trim reset');
+  // Save the current system as a scene and load it back.
+  await page.click('button:has-text("Save current")');
+  await page.fill('.modal input', 'E2E scene');
+  await page.keyboard.press('Enter');
+  await page.waitForSelector('.scene-item:has-text("E2E scene")');
+  await wait(100);
+  assert((await page.locator('.modal-backdrop').count()) === 0, 'Enter in a prompt must not reopen it');
+});
+
 await step('settings: speaker output switches panners to equal-power', async () => {
   await page.goto(`${base}#/settings`);
   await page.click('.segmented button:has-text("Speakers (equal-power)")');
@@ -423,7 +476,7 @@ await step('state and library persist across reload', async () => {
 });
 
 await step('every view renders without console errors', async () => {
-  for (const v of ['home', 'songs', 'albums', 'artists', 'genres', 'liked', 'playlists', 'now-playing', 'search?q=tone', 'studio/room', 'studio/hardware', 'studio/hardware/svs-pb-1000-pro', 'studio/receiver', 'studio/crossover', 'studio/eq', 'studio/analyzers', 'studio/measure', 'studio/bake', 'settings']) {
+  for (const v of ['home', 'songs', 'albums', 'artists', 'genres', 'liked', 'playlists', 'now-playing', 'search?q=tone', 'studio/room', 'studio/hardware', 'studio/hardware/svs-pb-1000-pro', 'studio/receiver', 'studio/crossover', 'studio/eq', 'studio/analyzers', 'studio/measure', 'studio/bass', 'studio/compare', 'studio/bake', 'settings']) {
     await page.goto(`${base}#/${v}`);
     await wait(250);
   }
