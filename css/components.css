@@ -782,7 +782,8 @@
 }
 
 .toast {
-  pointer-events: auto;
+  /* Informational: clicks pass through to the page; only actions are clickable. */
+  pointer-events: none;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -807,6 +808,7 @@
 }
 
 .toast button {
+  pointer-events: auto;
   font-weight: 800;
   color: #4a36ff;
 }

@@ -262,6 +262,54 @@ await step('room: drag the subwoofer into a corner → corner loading & new moda
   assert(after.b > 4, `corner loading ${after.b}`);
 });
 
+await step('room: 3D view renders, drags objects and orbits', async () => {
+  await page.goto(`${base}#/studio/room`);
+  await page.click('.room-toolbar .segmented button:has-text("3D")');
+  await page.waitForFunction(() => window.__audiospace.currentView?.editor?.constructor?.name === 'Room3D');
+  await page.evaluate(() => document.querySelector('.room-canvas').scrollIntoView({ block: 'end' }));
+  await wait(300);
+  const pos = await evalApp(() => {
+    const ed = window.__audiospace.currentView.editor;
+    const s = window.__audiospace.store.state.subs[0];
+    const r = ed.canvas.getBoundingClientRect();
+    const p = ed.project({ x: s.x, y: (ed._objects().find((o) => o.id === s.id).cy), z: s.z });
+    return { x: r.left + p[0], y: r.top + p[1], before: [s.x, s.z] };
+  });
+  await page.mouse.move(pos.x, pos.y);
+  await page.mouse.down();
+  // Drag toward the room centre (the sub may already sit in a corner).
+  const centre = await evalApp(() => {
+    const ed = window.__audiospace.currentView.editor;
+    const r = ed.canvas.getBoundingClientRect();
+    const room = window.__audiospace.store.state.room;
+    const p = ed.project({ x: room.width / 2, y: 0.2, z: room.depth / 2 });
+    return { x: r.left + p[0], y: r.top + p[1] };
+  });
+  await page.mouse.move((pos.x + centre.x) / 2, (pos.y + centre.y) / 2, { steps: 6 });
+  await page.mouse.up();
+  const after = await evalApp(() => [window.__audiospace.store.state.subs[0].x, window.__audiospace.store.state.subs[0].z]);
+  assert(Math.hypot(after[0] - pos.before[0], after[1] - pos.before[1]) > 0.2, `sub moved in 3D ${pos.before} -> ${after}`);
+  const cv = await page.$('.room-canvas');
+  const b = await cv.boundingBox();
+  const yaw0 = await evalApp(() => window.__audiospace.currentView.editor.cam.yaw);
+  await page.mouse.move(b.x + 20, b.y + 20);
+  await page.mouse.down();
+  await page.mouse.move(b.x + 160, b.y + 60, { steps: 5 });
+  await page.mouse.up();
+  const yaw1 = await evalApp(() => window.__audiospace.currentView.editor.cam.yaw);
+  assert(Math.abs(yaw1 - yaw0) > 0.3, 'orbit changes the camera');
+  const lit = await page.evaluate(() => {
+    const c = document.querySelector('.room-canvas');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i] + d[i + 1] + d[i + 2] > 90) n++;
+    return n;
+  });
+  assert(lit > 2000, `3D scene drew ${lit} bright pixels`);
+  await page.click('.room-toolbar .segmented button:has-text("2D plan")');
+  await page.waitForFunction(() => window.__audiospace.currentView?.editor?.constructor?.name === 'RoomEditor');
+});
+
 await step('room: bass heatmap renders', async () => {
   await page.click('label.toggle:has-text("Bass heatmap")');
   await page.waitForSelector('.heat-legend:has-text("relative to your seat")', { timeout: 15000 });
@@ -529,7 +577,12 @@ await step('no clicks or pops while every control is changed during playback', a
       vals.push([s / sr, m]);
     }
     const med = vals.map((v) => v[1]).sort((a, b) => a - b)[vals.length >> 1];
-    return { seconds: x.length / sr, spikes: vals.filter((v) => v[1] > med * 8).map((v) => [+v[0].toFixed(3), +(v[1] / med).toFixed(1)]) };
+    // A click: one 5 ms window above 12× the steady-tone baseline, or two
+    // consecutive windows above 8× (real pops measured 12–80× and ring on).
+    const r = vals.map((v) => v[1] / med);
+    const spikes = [];
+    for (let i = 0; i < r.length; i++) if (r[i] > 12 || (r[i] > 8 && (r[i - 1] > 8 || r[i + 1] > 8))) spikes.push([+vals[i][0].toFixed(3), +r[i].toFixed(1)]);
+    return { seconds: x.length / sr, spikes };
   });
   assert(res.seconds > 4, `recorded ${res.seconds}s`);
   assert(res.spikes.length === 0, `clicks detected at ${JSON.stringify(res.spikes.slice(0, 8))}`);

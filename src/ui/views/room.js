@@ -2,6 +2,7 @@
 
 import { h, icon, clear, viewDebounce } from '../dom.js';
 import { RoomEditor } from '../../viz/roomCanvas.js';
+import { Room3D } from '../../viz/room3d.js';
 import { ResponsePlot } from '../../viz/responsePlot.js';
 import { sliderRow, toggle, select, segmented, numberInput, knob } from '../components/controls.js';
 import { toast, confirmDialog } from '../components/overlays.js';
@@ -29,8 +30,9 @@ const CHANNELS = [
 
 export function roomView(app, params, query, disposer) {
   const store = app.store;
-  const canvas = h('canvas.room-canvas', { 'aria-label': 'Room editor. Drag speakers, subwoofers and the listener.' });
-  const editor = new RoomEditor(canvas, app);
+  const is3d = !!store.state.ui.room3d;
+  const canvas = h('canvas.room-canvas', { 'aria-label': is3d ? 'Room in 3D. Drag objects across the floor, Shift-drag to change height, drag empty space to orbit, scroll to zoom.' : 'Room editor. Drag speakers, subwoofers and the listener.' });
+  const editor = is3d ? new Room3D(canvas, app) : new RoomEditor(canvas, app);
   disposer.add(() => editor.destroy());
   const inspector = h('div.inspector-body');
   let tab = 'selection';
@@ -124,8 +126,14 @@ export function roomView(app, params, query, disposer) {
     store.patch('listener', fix(store.state.listener));
   };
 
+  const viewSeg = segmented([{ value: '2d', label: '2D plan' }, { value: '3d', label: '3D' }], is3d ? '3d' : '2d', (v) => {
+    store.set('ui.room3d', v === '3d');
+    // Rebuild the view with the other renderer (same route).
+    app._showView(app.router.current);
+  }, { label: 'Room view' });
   const toolbar = h(
     'div.room-toolbar',
+    viewSeg,
     h('div.split', icon('room', 18), presetSel),
     h('button.btn.small', { onClick: addSpeaker }, icon('speaker', 15), 'Speaker'),
     h('button.btn.small', { onClick: addSub }, icon('sub', 15), 'Subwoofer'),
@@ -229,7 +237,7 @@ export function roomView(app, params, query, disposer) {
     'div.view-inner.room-view',
     h('div.page-head', h('div', h('h1', 'Room Simulator'), h('div.muted', 'Drag hardware and yourself around the room. Everything you hear updates live — distance, toe-in, boundary loading, room modes, reverb.'))),
     h('div.room-layout',
-      h('div.room-stage', toolbar, h('div.room-canvas-wrap', canvas, heatInfo), h('div.room-hint.dim', 'Tips: double-click a speaker to change model · arrows nudge (Shift = 25 cm) · [ ] rotate · Delete removes · click a wall to change its material')),
+      h('div.room-stage', toolbar, h('div.room-canvas-wrap', canvas, heatInfo), h('div.room-hint.dim', is3d ? 'Tips: drag empty space to orbit · scroll or pinch to zoom · drag objects across the floor · Shift-drag or PgUp/PgDn changes height · double-click empty space to reset the view' : 'Tips: double-click a speaker to change model · arrows nudge (Shift = 25 cm) · [ ] rotate · Delete removes · click a wall to change its material')),
       h('aside.inspector', h('div.inspector-tabs', tabs), inspector),
     ),
   );
