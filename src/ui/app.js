@@ -2,6 +2,8 @@
 // player, importer…), mounts the shell, routes views and owns global actions.
 
 import { Store } from '../core/store.js';
+import { loadInstalledAddons } from '../hardware/addonStore.js';
+import { importAddonFiles } from './components/addonManager.js';
 import { migrateState, STORAGE_KEY, defaultState } from '../core/settings.js';
 import { openDatabase } from '../core/db.js';
 import { Library, artistKeyOf } from '../library/library.js';
@@ -32,6 +34,8 @@ const ENGINE_PATHS = ['engine', 'receiver', 'crossover', 'eq', 'roomCorrection',
 export class App {
   async init(root) {
     this.root = root;
+    // Custom hardware first: saved settings may reference add-on models.
+    this.addonProblems = loadInstalledAddons().problems;
     this.store = new Store(migrateState(Store.load(STORAGE_KEY)), { persistKey: STORAGE_KEY });
     this.db = await openDatabase();
     this.art = new ArtCache(this.db);
@@ -398,7 +402,7 @@ export class App {
   }
 
   _installDropImport() {
-    const overlay = h('div.drop-overlay', h('div.drop-box', h('div.empty-icon', { html: '' }), h('h2', 'Drop music to import'), h('p.muted', 'Folders and files — MP3, FLAC, WAV, M4A, OGG, OPUS')));
+    const overlay = h('div.drop-overlay', h('div.drop-box', h('div.empty-icon', { html: '' }), h('h2', 'Drop music to import'), h('p.muted', 'Folders and files — MP3, FLAC, WAV, M4A, OGG, OPUS — or hardware add-ons (.json)')));
     document.body.appendChild(overlay);
     let depth = 0;
     const hasFiles = (e) => [...(e.dataTransfer?.types || [])].includes('Files');
@@ -420,6 +424,11 @@ export class App {
       e.preventDefault();
       depth = 0;
       overlay.classList.remove('show');
+      // Hardware add-ons (.json) go to the add-on importer, music to the library.
+      const files = [...(e.dataTransfer.files || [])];
+      const addons = files.filter((f) => /\.json$/i.test(f.name));
+      if (addons.length) importAddonFiles(this, addons);
+      if (addons.length && addons.length === files.length) return;
       this.importer.importDrop(e.dataTransfer).catch((err) => toast(`Import failed: ${err.message || err}`, { type: 'error' }));
     });
   }

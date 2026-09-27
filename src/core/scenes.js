@@ -8,7 +8,7 @@ import { ROOM_PRESETS, roomFromPreset, defaultLayout } from '../acoustics/room.j
 import { buildPlan } from '../audio/plan.js';
 import { predictSystem, bandMeanDb } from '../audio/predict.js';
 import { octaveGrid } from '../util/math.js';
-import { defaultState, makeSpeaker, makeSub } from './settings.js';
+import { defaultState, makeSpeaker, makeSub, fixModelIds } from './settings.js';
 
 export const SCENE_KEYS = ['receiver', 'crossover', 'eq', 'roomCorrection', 'room', 'listener', 'speakers', 'subs'];
 
@@ -30,15 +30,23 @@ export function captureScene(state, name) {
   return { id: uid('scene'), name, createdAt: Date.now(), data, summary: sceneSummary(data) };
 }
 
-/** Apply a scene's system settings to the store (one batched update). */
+/**
+ * Apply a scene's system settings to the store (one batched update). Models
+ * that are no longer installed fall back to the defaults; returns how many.
+ */
 export function applyScene(store, scene) {
-  for (const k of SCENE_KEYS) if (scene.data[k] !== undefined) store.set(k, clone(scene.data[k]));
+  const data = {};
+  for (const k of SCENE_KEYS) if (scene.data[k] !== undefined) data[k] = clone(scene.data[k]);
+  const fixed = fixModelIds(data);
+  for (const k of Object.keys(data)) store.set(k, data[k]);
+  return fixed;
 }
 
 /** The state that results from applying `scene` on top of `state`. */
 export function stateWithScene(state, scene) {
   const s = clone(state);
   for (const k of SCENE_KEYS) if (scene.data[k] !== undefined) s[k] = clone(scene.data[k]);
+  fixModelIds(s);
   return s;
 }
 

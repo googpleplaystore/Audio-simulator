@@ -9,7 +9,7 @@ import { buildPlan } from '../../audio/plan.js';
 import { predictSystem, bandMeanDb } from '../../audio/predict.js';
 import { cascadeMagnitudeDb } from '../../dsp/biquad.js';
 import { STANDARD_CROSSOVERS, suggestCrossover } from '../../dsp/curves.js';
-import { getHardware } from '../../hardware/index.js';
+import { getHardware, resolveHardware } from '../../hardware/index.js';
 import { octaveGrid, stddev, clamp } from '../../util/math.js';
 
 const FREQS = octaveGrid(15, 1000, 48);
@@ -107,7 +107,7 @@ export function crossoverView(app, params, query, disposer) {
   const renderSubs = () => {
     clear(subsBox);
     for (const sb of store.state.subs) {
-      const hw = getHardware(sb.modelId);
+      const hw = resolveHardware(sb.modelId, 'subwoofer');
       subsBox.appendChild(
         h('div.sub-row',
           h('div.grow', h('div', { style: { fontWeight: 700 } }, hw?.name), h('div.dim', { style: { fontSize: '12px' } }, `${hw?.driver.size}″ ${hw?.enclosure} · f3 ${hw?.f3} Hz`)),

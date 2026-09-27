@@ -30,7 +30,7 @@ export function pickModel(category, currentId = null) {
             { class: hw.id === currentId ? 'current' : '', onClick: () => close(hw.id) },
             h('div.picker-art', { html: hardwareSvg(hw, { width: 44 }) }),
             h('div.grow.ellipsis',
-              h('div.split', h('span.badge', `#${hw.rank}`), h('strong.ellipsis', hw.name), hw.id === currentId ? h('span.badge.teal', 'current') : null),
+              h('div.split', h('span.badge', hw.rank == null ? 'Custom' : `#${hw.rank}`), h('strong.ellipsis', hw.name), hw.id === currentId ? h('span.badge.teal', 'current') : null),
               h('div.dim.ellipsis', { style: { fontSize: '12px', marginTop: '3px' } }, specLine(hw)),
               h('div.split', { style: { marginTop: '4px', gap: '4px' } }, soundTags(hw).slice(0, 4).map((t) => h('span.badge', t))),
             ),

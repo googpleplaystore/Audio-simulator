@@ -8,7 +8,7 @@ import { sliderRow, toggle, select, segmented, numberInput, knob } from '../comp
 import { toast, confirmDialog } from '../components/overlays.js';
 import { pickModel, specLine } from '../components/modelPicker.js';
 import { hardwareSvg } from '../hardwareArt.js';
-import { getHardware } from '../../hardware/index.js';
+import { resolveHardware } from '../../hardware/index.js';
 import { MATERIALS, MATERIAL_IDS, BANDS } from '../../acoustics/materials.js';
 import {
   ROOM_PRESETS, roomFromPreset, defaultLayout, rt60Bands, schroederFrequency, criticalDistance, volume, meanAlpha, roomModes, boundaryGain, modalCrossover,
@@ -279,7 +279,7 @@ function sourcePanel(app, sel, editor, refresh) {
   const listKey = isSub ? 'subs' : 'speakers';
   const src = store.get(listKey).find((x) => x.id === sel.id);
   if (!src) return h('div.dim', 'Nothing selected');
-  const hw = getHardware(src.modelId);
+  const hw = resolveHardware(src.modelId, isSub ? 'subwoofer' : 'bookshelf');
   const apply = (patch) => {
     store.updateItem(listKey, src.id, patch);
     if (Object.keys(patch).some((k) => STRUCTURAL.has(k))) refresh();

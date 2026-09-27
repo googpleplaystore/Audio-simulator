@@ -1204,3 +1204,59 @@
   flex-wrap: wrap;
   gap: 6px;
 }
+
+/* ---------------------------------------------------------------- hardware add-ons */
+.addon-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--bg-3);
+}
+
+.addon-tip {
+  display: flex;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: rgba(var(--accent-rgb), 0.1);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+  font-size: 13px;
+}
+
+.addon-tip code,
+.addon-problems code,
+.addon-fields code {
+  font-size: 12px;
+  background: var(--bg-4);
+  padding: 1px 5px;
+  border-radius: 4px;
+  overflow-wrap: anywhere;
+}
+
+.addon-problems {
+  max-height: 320px;
+  overflow: auto;
+  padding-left: 18px;
+  font-size: 13px;
+  display: grid;
+  gap: 4px;
+}
+
+.addon-problems li.error::marker {
+  color: #ff6b9a;
+}
+
+.addon-paste {
+  width: 100%;
+  min-height: 240px;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.addon-fields td:first-child {
+  white-space: nowrap;
+  vertical-align: top;
+}

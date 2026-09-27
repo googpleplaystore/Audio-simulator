@@ -1,7 +1,7 @@
 // Default application state and migration of persisted state.
 
 import { roomFromPreset, defaultLayout } from '../acoustics/room.js';
-import { DEFAULT_SPEAKER_ID, DEFAULT_SUB_ID } from '../hardware/index.js';
+import { DEFAULT_SPEAKER_ID, DEFAULT_SUB_ID, getHardware } from '../hardware/index.js';
 import { GEQ_FREQS } from '../dsp/curves.js';
 
 export const STATE_VERSION = 2;
@@ -99,8 +99,31 @@ export function migrateState(saved) {
   if (!Array.isArray(merged.eq.graphic.gains) || merged.eq.graphic.gains.length !== GEQ_FREQS.length) merged.eq.graphic.gains = GEQ_FREQS.map(() => 0);
   merged.speakers = (merged.speakers || []).filter((s) => s && s.id && Number.isFinite(s.x) && Number.isFinite(s.z));
   merged.subs = (merged.subs || []).filter((s) => s && s.id && Number.isFinite(s.x) && Number.isFinite(s.z));
+  fixModelIds(merged);
   merged.version = STATE_VERSION;
   return merged;
+}
+
+/**
+ * Point speakers/subwoofers whose model is unknown (e.g. from a removed
+ * add-on or an imported profile) or of the wrong category at the default
+ * models. Mutates `state`; returns how many were changed.
+ */
+export function fixModelIds(state) {
+  let n = 0;
+  for (const s of state.speakers || []) {
+    if (getHardware(s.modelId)?.category !== 'bookshelf') {
+      s.modelId = DEFAULT_SPEAKER_ID;
+      n++;
+    }
+  }
+  for (const s of state.subs || []) {
+    if (getHardware(s.modelId)?.category !== 'subwoofer') {
+      s.modelId = DEFAULT_SUB_ID;
+      n++;
+    }
+  }
+  return n;
 }
 
 /** Strip transient fields before persisting. */

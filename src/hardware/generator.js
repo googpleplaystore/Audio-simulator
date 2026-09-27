@@ -17,7 +17,7 @@ import { seedFrom } from '../util/hash.js';
 
 export const CATEGORY_SIZE = 100;
 
-const slug = (s) =>
+export const slug = (s) =>
   s
     .toLowerCase()
     .replace(/&/g, 'and')
@@ -58,7 +58,7 @@ export const BRAND_STYLE = {
   SVS: { cabinet: '#1a1a1c', baffle: '#141416', woofer: '#2d2d31', tweeter: '#3a3a3f', accent: '#9aa0a6' },
   Pyle: { cabinet: '#1b1b1b', baffle: '#1b1b1b', woofer: '#333', tweeter: '#444', accent: '#e33' },
 };
-const DEFAULT_STYLE = { cabinet: '#1c1c1f', baffle: '#151517', woofer: '#2e2e33', tweeter: '#3a3a40', accent: '#999' };
+export const DEFAULT_STYLE = { cabinet: '#1c1c1f', baffle: '#151517', woofer: '#2e2e33', tweeter: '#3a3a40', accent: '#999' };
 
 const WOOFER_MATERIAL = {
   Klipsch: 'Copper-spun / Cerametallic',
@@ -143,8 +143,8 @@ function subDims(driverIn, count, enclosure) {
   return { w: round(s, 0.5), h: round(s * 1.04, 0.5), d: round(d, 0.5), litres: round(litres, 0.1), weightKg: round(litres * 0.75 + driverIn * 0.6, 0.1) };
 }
 
-function finalizeBookshelf(e, rank) {
-  const id = slug(`${e.brand} ${e.model}`);
+export function finalizeBookshelf(e, rank) {
+  const id = e.id || slug(`${e.brand} ${e.model}`);
   const house = SPEAKER_HOUSE_SOUND[e.brand] || DEFAULT_SPEAKER_VOICING;
   const tType = e.tweeter.type;
   const rms = e.active ? e.ampWatts : e.rmsWatts;
@@ -179,14 +179,15 @@ function finalizeBookshelf(e, rank) {
     price: e.price,
     priceBracket: priceBracket(e.price, 'bookshelf'),
     signature: house.tag,
-    voicing: [...house.filters.map((f) => ({ ...f })), ...modelRipple(id, e.price, 'bookshelf')],
+    voicing: e.voicing ? e.voicing.map((f) => ({ ...f })) : [...house.filters.map((f) => ({ ...f })), ...modelRipple(id, e.price, 'bookshelf')],
     directivityDb: DIRECTIVITY_DB[tType] ?? 8,
     directivityQ: DIRECTIVITY_Q[tType] ?? 2.2,
     dims,
-    style: BRAND_STYLE[e.brand] || DEFAULT_STYLE,
+    style: e.style || BRAND_STYLE[e.brand] || DEFAULT_STYLE,
     features: e.features || [],
     specSource: e.specSource || 'published',
     estimated: e.estimated || [],
+    ...(e.addon ? { addon: e.addon, measured: e.measured || null, fit: e.fit || null } : {}),
   };
 }
 
@@ -246,8 +247,8 @@ export function extrapolateBookshelf(t) {
   };
 }
 
-function finalizeSub(e, rank) {
-  const id = slug(`${e.brand} ${e.model}`);
+export function finalizeSub(e, rank) {
+  const id = e.id || slug(`${e.brand} ${e.model}`);
   const house = SUB_HOUSE_SOUND[e.brand] || DEFAULT_SUB_VOICING;
   const sens = e.sensitivity ?? subEfficiency(e.driver, e.count, e.enclosure);
   const dims = e.dims || subDims(e.driver, e.count, e.enclosure);
@@ -276,12 +277,13 @@ function finalizeSub(e, rank) {
     phase: e.phase || 'switch',
     lpfRange: e.lpfRange || [40, 160],
     signature: house.tag,
-    voicing: [...house.filters.map((f) => ({ ...f })), ...modelRipple(id, e.price, 'subwoofer')],
+    voicing: e.voicing ? e.voicing.map((f) => ({ ...f })) : [...house.filters.map((f) => ({ ...f })), ...modelRipple(id, e.price, 'subwoofer')],
     dims,
-    style: BRAND_STYLE[e.brand] || DEFAULT_STYLE,
+    style: e.style || BRAND_STYLE[e.brand] || DEFAULT_STYLE,
     features: e.features || [],
     specSource: e.specSource || 'published',
     estimated: e.estimated || [],
+    ...(e.addon ? { addon: e.addon, measured: e.measured || null, fit: e.fit || null } : {}),
   };
 }
 

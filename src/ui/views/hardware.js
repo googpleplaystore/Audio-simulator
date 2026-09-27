@@ -11,6 +11,8 @@ import { getBookshelfSpeakers, getSubwoofers, getHardware, responseCurve, soundT
 import { formatPrice, formatHz } from '../../util/format.js';
 import { logspace } from '../../util/math.js';
 import { notFound } from './library.js';
+import { openAddonManager } from '../components/addonManager.js';
+import { addonEvents } from '../../hardware/addonStore.js';
 
 const COMPARE_COLORS = ['#8d7dff', '#36e2cf', '#ffb547', '#ff6b9a'];
 const compareSet = new Set();
@@ -66,7 +68,7 @@ function card(app, hw, onCompare) {
   return h(
     'a.hw-card',
     { href: `#/studio/hardware/${hw.id}` },
-    h('div.hw-rank', `#${hw.rank}`),
+    h('div.hw-rank', hw.rank == null ? 'Custom' : `#${hw.rank}`),
     h('label.hw-compare', { 'data-tip': 'Add to comparison', onClick: (e) => e.stopPropagation() }, cmp, h('span', 'Compare')),
     h('div.hw-art', { html: hardwareSvg(hw, { width: hw.category === 'subwoofer' ? 118 : 96 }) }),
     h('div.hw-body',
@@ -75,7 +77,9 @@ function card(app, hw, onCompare) {
       h('div.hw-spec', specLine(hw)),
       h('div.split.wrap', { style: { gap: '4px', marginTop: '8px' } },
         h('span.badge', hw.priceBracket),
-        h('span.badge', { class: hw.specSource === 'published' ? 'ok' : 'warn', 'data-tip': hw.specSource === 'published' ? 'Manufacturer-published specifications' : 'Specs extrapolated by the physics model' }, hw.specSource === 'published' ? 'Published' : 'Extrapolated'),
+        hw.specSource === 'addon'
+          ? h('span.badge.accent', { 'data-tip': `From the add-on “${hw.addon?.name}”` }, 'Add-on')
+          : h('span.badge', { class: hw.specSource === 'published' ? 'ok' : 'warn', 'data-tip': hw.specSource === 'published' ? 'Manufacturer-published specifications' : 'Specs extrapolated by the physics model' }, hw.specSource === 'published' ? 'Published' : 'Extrapolated'),
         tags.map((t) => h('span.badge.accent', t)),
       ),
       h('div.hw-foot', h('span.hw-price', formatPrice(hw.price)), assignActions(app, hw, true)),
@@ -125,7 +129,7 @@ export function hardwareView(app, params, query, disposer) {
       return true;
     });
     const sorters = {
-      rank: (a, b) => a.rank - b.rank,
+      rank: (a, b) => (a.rank ?? 1e9) - (b.rank ?? 1e9),
       'price-asc': (a, b) => a.price - b.price,
       'price-desc': (a, b) => b.price - a.price,
       bass: (a, b) => a.f3 - b.f3,
@@ -136,7 +140,8 @@ export function hardwareView(app, params, query, disposer) {
     list.sort(sorters[filters.sort] || sorters.rank);
     clear(grid);
     for (const hw of list) grid.appendChild(card(app, hw, () => renderCompare()));
-    count.textContent = `${list.length} of 100 ${cat === 'subwoofer' ? 'subwoofers' : 'bookshelf speakers'}`;
+    const total = (cat === 'subwoofer' ? getSubwoofers() : getBookshelfSpeakers()).length;
+    count.textContent = `${list.length} of ${total} ${cat === 'subwoofer' ? 'subwoofers' : 'bookshelf speakers'}`;
   };
   const search = h('input.input', { type: 'search', placeholder: 'Filter models…', style: { width: '220px' } });
   search.addEventListener('input', debounce(() => {
@@ -185,7 +190,9 @@ export function hardwareView(app, params, query, disposer) {
   const el = h(
     'div.view-inner',
     h('div.page-head', h('div', h('h1', 'Hardware Catalog'), h('div.muted', 'The Top 100 best-selling bookshelf speakers and subwoofers, each with a physically-modelled response.')),
-      h('button.btn.small.ghost', { onClick: () => downloadJson(exportDatabase(), 'audiospace-hardware-db.json') }, icon('download', 14), 'Database JSON')),
+      h('div.split', { style: { gap: '8px' } },
+        h('button.btn.small', { onClick: () => openAddonManager(app) }, icon('plus', 14), 'Add-ons'),
+        h('button.btn.small.ghost', { onClick: () => downloadJson(exportDatabase(), 'audiospace-hardware-db.json') }, icon('download', 14), 'Database JSON'))),
     h('div.hw-toolbar', tabs, h('div.split', icon('search', 16), search), brandSel,
       select([{ value: '', label: 'Any price' }, { value: '$', label: '$ Budget' }, { value: '$$', label: '$$ Mid' }, { value: '$$$', label: '$$$ Upper' }, { value: '$$$$', label: '$$$$ Premium' }], '', (v) => { filters.price = v; render(); }),
       select([{ value: '', label: 'Any enclosure' }, { value: 'ported', label: 'Ported' }, { value: 'sealed', label: 'Sealed' }, { value: 'pr', label: 'Passive radiator' }], '', (v) => { filters.enclosure = v; render(); }),
@@ -197,6 +204,10 @@ export function hardwareView(app, params, query, disposer) {
     grid,
     h('p.dim', { style: { fontSize: '12px', marginTop: '24px' } }, 'Rankings are illustrative (Amazon best-seller ranks change hourly). “Published” entries follow manufacturer specifications; “Extrapolated” entries derive their full spec sheets from driver size, enclosure, amplifier power and price tier using loudspeaker physics.'),
   );
+  disposer.add(addonEvents.on('change', () => {
+    renderBrands();
+    render();
+  }));
   return { el, title: 'Hardware Catalog' };
 }
 
@@ -240,7 +251,10 @@ export function hardwareDetailView(app, params, query, disposer) {
     const r = responseCurve(hw, logspace(isSub ? 8 : 15, isSub ? 600 : 24000, 300));
     plot.markers = [{ f: hw.f3, color: 'rgba(255,181,71,0.8)', label: `f3 ${hw.f3} Hz` }];
     if (hw.crossoverHz) plot.markers.push({ f: hw.crossoverHz, color: 'rgba(54,226,207,0.7)', label: 'Internal crossover' });
-    plot.setCurves([{ freqs: r.freqs, db: r.db, color: '#8d7dff', width: 2.5, glow: true, fill: 'rgba(141,125,255,0.12)', fillTo: -30, label: 'Modelled anechoic on-axis response' }]);
+    plot.setCurves([
+      { freqs: r.freqs, db: r.db, color: '#8d7dff', width: 2.5, glow: true, fill: 'rgba(141,125,255,0.12)', fillTo: -30, label: 'Modelled anechoic on-axis response' },
+      hw.measured ? { freqs: hw.measured.freqs, db: hw.measured.db, color: '#ffb547', width: 1.5, dash: [5, 3], label: 'Measured (add-on)' } : null,
+    ]);
   });
   const similar = (isSub ? getSubwoofers() : getBookshelfSpeakers()).filter((x) => x.id !== hw.id && Math.abs(Math.log(x.price / hw.price)) < 0.4).slice(0, 6);
   const el = h(
@@ -249,7 +263,7 @@ export function hardwareDetailView(app, params, query, disposer) {
     h('div.detail-head',
       h('div.detail-art', { html: hardwareSvg(hw, { width: isSub ? 220 : 170 }) }),
       h('div.grow',
-        h('div.hero-kind', `#${hw.rank} best-selling ${isSub ? 'subwoofer' : 'bookshelf speaker'}`),
+        h('div.hero-kind', hw.rank == null ? `Custom ${isSub ? 'subwoofer' : 'speaker'} · add-on “${hw.addon?.name || ''}”${hw.addon?.author ? ` by ${hw.addon.author}` : ''}` : `#${hw.rank} best-selling ${isSub ? 'subwoofer' : 'bookshelf speaker'}`),
         h('h1', hw.name),
         h('div.muted', { style: { marginTop: '6px' } }, hw.signature),
         h('div.split.wrap', { style: { marginTop: '12px', gap: '6px' } },

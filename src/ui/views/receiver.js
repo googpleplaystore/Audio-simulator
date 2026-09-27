@@ -5,7 +5,7 @@ import { h, icon, clear } from '../dom.js';
 import { knob, sliderRow, toggle, select, segmented } from '../components/controls.js';
 import { modal } from '../components/overlays.js';
 import { RECEIVERS, getReceiver, AMP_CLASSES } from '../../hardware/receivers.js';
-import { getHardware } from '../../hardware/index.js';
+import { resolveHardware } from '../../hardware/index.js';
 import { autoSetup, computeRoomCorrection } from '../../audio/calibration.js';
 import { formatDb } from '../../util/format.js';
 import { clamp } from '../../util/math.js';
@@ -101,7 +101,7 @@ export function receiverView(app, params, query, disposer) {
     const rows = [...s.speakers.map((x) => ({ ...x, list: 'speakers' })), ...s.subs.map((x) => ({ ...x, list: 'subs' }))];
     for (const row of rows) {
       const p = plan?.sources.find((x) => x.id === row.id);
-      const hw = getHardware(row.modelId);
+      const hw = resolveHardware(row.modelId, row.list === 'subs' ? 'subwoofer' : 'bookshelf');
       const bar = h('i');
       const watts = h('span.mono', '0 W');
       const clip = h('span.led', { 'data-tip': 'Amplifier clipping' });

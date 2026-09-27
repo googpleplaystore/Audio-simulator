@@ -5,7 +5,7 @@ const browserGlobals = {
   Blob: 'readonly', File: 'readonly', FileReader: 'readonly', TextDecoder: 'readonly', TextEncoder: 'readonly',
   AudioContext: 'readonly', OfflineAudioContext: 'readonly', AudioWorkletNode: 'readonly', MediaRecorder: 'readonly',
   MediaMetadata: 'readonly', Audio: 'readonly', Image: 'readonly', OffscreenCanvas: 'readonly', createImageBitmap: 'readonly',
-  requestAnimationFrame: 'readonly', cancelAnimationFrame: 'readonly', ResizeObserver: 'readonly', IntersectionObserver: 'readonly',
+  requestAnimationFrame: 'readonly', cancelAnimationFrame: 'readonly', ResizeObserver: 'readonly', MutationObserver: 'readonly', IntersectionObserver: 'readonly',
   performance: 'readonly', setTimeout: 'readonly', clearTimeout: 'readonly', setInterval: 'readonly', clearInterval: 'readonly',
   queueMicrotask: 'readonly', AbortController: 'readonly', structuredClone: 'readonly', console: 'readonly', Worker: 'readonly', self: 'readonly',
   caches: 'readonly', atob: 'readonly', btoa: 'readonly', Node: 'readonly', globalThis: 'readonly', Intl: 'readonly',
