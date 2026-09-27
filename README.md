@@ -1,0 +1,100 @@
+# AudioSpace — The Ultimate Virtual Audio Environment Simulator
+
+AudioSpace is a browser-based music player wrapped around a physically-modelled listening room. Import your local library, pick any of **100 best-selling bookshelf speakers** and **100 subwoofers**, drive them with a simulated **AV receiver**, place everything in a **3D room** and hear the result — crossovers, amplifier clipping, corner loading, room modes, reverberation and binaural HRTF — in real time.
+
+Everything runs locally with the Web Audio API. Your music never leaves your device. No build step, no runtime dependencies.
+
+![Room simulator with bass heat map](docs/screenshots/room.png)
+
+| | |
+|---|---|
+| ![Home](docs/screenshots/home.png) | ![Album](docs/screenshots/album.png) |
+| ![Analyzers](docs/screenshots/analyzers.png) | ![Receiver](docs/screenshots/receiver.png) |
+| ![Crossover](docs/screenshots/crossover.png) | ![Equalizer](docs/screenshots/eq.png) |
+
+## Quick start
+
+```bash
+npm start            # zero-dependency static server → http://localhost:8080
+```
+
+Open the page, then **Import music folder** (Chrome/Edge remember folder access between sessions via the File System Access API; Firefox/Safari fall back to `webkitdirectory`), **Choose files**, drag & drop folders anywhere, or click **Add demo & test tracks** for procedurally-synthesised music and calibration signals.
+
+AudioSpace must be served from `http://localhost` or HTTPS (secure context for the File System Access API, AudioWorklet and the service worker). Deploy by copying the repository to any static host.
+
+## Features
+
+### Phase 1 — Library & Spotify-style player
+- **Ingestion**: File System Access API directory picking with persistent handles, `webkitdirectory` fallback, drag-and-drop of folders/files, relinking, cancellable concurrent import with progress.
+- **Metadata** (hand-written parsers, no libraries): ID3v2.2/2.3/2.4 (unsynchronisation, extended headers, APIC/PIC, TXXX ReplayGain, USLT lyrics), ID3v1, MPEG frame headers + Xing/Info/VBRI duration, FLAC STREAMINFO/Vorbis comments/PICTURE, MP4/M4A atoms (moov-at-end, `ilst`, `covr`, freeform `----`), RIFF/WAV + RF64 (INFO, `id3 ` chunk), AIFF, Ogg Vorbis/Opus (comments, granule duration), ADTS AAC. Filename/folder fallbacks and folder cover art (`cover.jpg`, `folder.jpg` …).
+- **IndexedDB persistence** for tracks, artwork (content-hash de-duplicated, down-scaled thumbnails, dominant colours), waveforms, playlists, likes; LRU object-URL cache so large libraries never leak blob URLs.
+- **UI**: dark premium interface with sidebar (Songs, Albums, Artists, Genres, Liked Songs, Playlists), virtualised track tables (multi-select, sortable columns, drag to playlists, in-playlist reordering), real-time search, album/artist/genre pages with colour-matched heroes, full-screen Now Playing with lyrics.
+- **Playback bar**: interactive waveform seek (peaks decoded at low sample rate, cached), shuffle, repeat off/all/one, master volume, mini stereo level meter, like button.
+- **Up Next** queue with a priority "Next in queue" list and the play context, both drag-and-drop reorderable (pointer-based, touch friendly), plus crossfade, gapless pre-loading, ReplayGain (track/album with peak protection), playback speed, Media Session (lock-screen) controls and session restore.
+
+### Phase 2 — Hardware database
+- Exactly **100 bookshelf speakers + 100 subwoofers** (`src/hardware/`, exportable to `data/hardware-db.json` via `npm run export:hardware`).
+- **Seeds** use manufacturer-published specifications: Edifier R1280DBs, Klipsch RP-600M II, KEF LS50 Meta, Audioengine A2+ and HD6, Sony SS-CS5, Polk T15, ELAC Debut 2.0 B6.2, Micca PB42X, Vanatoo Transparent Zero, Sonos Era 100, Q Acoustics 3020i, B&W 607 S3, PreSonus Eris E3.5, Dali Spektor 2, Monitor Audio Bronze 50; SVS SB-1000 Pro and PB-1000 Pro, Klipsch R-120SW and R-100SW, Monoprice 9723, Sonos Sub Mini, KEF KC62, RSL Speedwoofer 10S II, Polk PSW10, Sony SA-CS9, ELAC SUB3030, Audioengine S8, Pyle PW18SUBA, Bose Bass Module 700, Dayton SUB-1200, BIC F12. Unpublished figures are flagged in `estimated`.
+- **The remaining entries are extrapolated** from driver size, enclosure, amplification and price tier using loudspeaker physics (Hofmann's-iron-law style trade-offs between size, extension and efficiency), and flagged `specSource: "extrapolated"`.
+- Every model gets a **response model**: 2nd-order (sealed, Qtc) or 4th-order (vented/PR) low-frequency roll-off at f3, port/tuning lift, HF limit, **brand house voicing** (e.g. Klipsch horn brightness, SVS flat and deep, Sony bass bump) and deterministic model-specific ripple, plus directivity (horns beam more) and power/SPL limits.
+- Catalog UI with filters, sorting, procedural SVG product illustrations, detail pages with modelled response, and side-by-side comparison.
+
+### Phase 3 — DSP, amplification and crossovers
+- **Gain staging** (see `src/audio/plan.js`): digital full scale drives the amplifier to 100 W into 8 Ω; an amp rated *P* watts clips at √P⁄10; speaker sensitivity converts volts to SPL. Push a 10 W amp and you hear it clip; tubes saturate softly (even harmonics), Class-D clips hard.
+- **Per-channel chain**: input gain → tone controls + ISO-226-style dynamic loudness → 31-band graphic EQ → 12-band parametric EQ → room correction → automatic EQ headroom → **0 dBFS DSP clip** → master volume (−80…+18 dB) → trims → amplifier (oversampled WaveShaper) → driver excursion limiting → **voice-coil thermal compression** (first-order thermal model) → sensitivity.
+- **Active Linkwitz–Riley crossovers** LR12/LR24/LR48 (exact Q values; LR2 needs 180° to sum flat — try it), Small/Large speaker modes, global and per-sub polarity, continuous phase, delay, automatic AVR-style time alignment, and a one-click **integration optimiser**.
+- **Room correction**: a virtual measurement microphone predicts the in-room response from the exact signal plan, then a greedy parametric fit pulls it towards Flat / Harman / B&K / X-curve targets with boost limits. **Auto setup** (Audyssey-style) sets channel levels, crossover and distances.
+- Live meters: amplifier watts, clip and excursion LEDs, coil temperature, DSP overload, output limiter gain reduction, SPL at the seat.
+
+### Phase 4 — Spatial audio and room physics
+- Interactive top-down **room editor**: drag speakers, subwoofers and the listener; rotate with a handle; auto toe-in; wall materials by clicking walls; distances and arrival times; **first-reflection points** (the "mirror trick"); animated wavefronts; snap grid; keyboard nudging.
+- **PannerNode** HRTF (or equal-power for speaker listening) with the inverse distance model (**inverse-square law**: −6 dB per doubling), propagation delay, off-axis high-frequency loss and air absorption.
+- **Low-frequency modal model**: a modal sum of the rectangular room's eigenmodes with wall-dependent damping, averaged over a head-sized region and fitted to a compact minimum-phase filter bank per source. It reproduces **corner loading** (+6…+9 dB), SBIR cancellations and standing waves; a **bass heat map** shows seat-to-seat variation. A simpler boundary-gain shelf model is available too.
+- **Convolution reverb** from a synthesised **true-stereo impulse response**: image-source early reflections (order 1–5) with per-octave wall reflection coefficients, plus a diffuse tail per octave band decaying at the **Eyring RT60**, energy-calibrated to the statistical reverberant ratio 16π/R. Presets: Small Bedroom, Treated Studio, Vaulted-Ceiling Living Room, Home Theater, Concert Hall, Cathedral, Bathroom, Garage, Club, Office, Anechoic; materials include Glass, Bare Drywall, Heavy Curtains, Acoustic Foam, bass traps and more. IRs are generated in a Web Worker and hot-swapped with a crossfade.
+
+### Phase 5 — Visualisation, haptics and export
+- Spectrogram (log-frequency, magma colour map), ⅓-octave RTA and FFT with source overlay and peak hold, analog VU meters with IEC ballistics, vectorscope with phosphor persistence and phase-correlation meter, **EBU R128 loudness** (momentary, short-term, integrated, LRA).
+- **Haptics**: sub-bass transients drive `navigator.vibrate` on phones and dual-rumble on connected gamepads, with a visual pulse on desktop.
+- **Bake**: render any track through the full simulation with `OfflineAudioContext` to 16-bit (TPDF dither), 24-bit or 32-bit float WAV at 44.1/48/96 kHz, with progress; export/import DSP profiles; export the room's 4-channel impulse response; record the live output to WAV via an AudioWorklet.
+
+### Robustness
+- AudioContext unlock on first gesture and recovery after OS interruptions; decks' `MediaElementSourceNode`s are created once; object URLs revoked on unload.
+- Click-free parameter changes everywhere (`setTargetAtTime` smoothing, declicked filter-type switches, crossfaded A/B bypass and IR swaps) — no pops when dragging EQ sliders or speakers.
+- A/B **bypass** with automatic level matching (`B`), output protection limiter, PWA manifest + service worker.
+
+## Keyboard shortcuts
+
+`Space` play/pause · `←/→` seek · `Shift+←/→` previous/next · `↑/↓` volume · `M` mute · `S` shuffle · `R` repeat · `L` like · `Q` side panel · `B` A/B bypass · `/` or `Ctrl+F` search · `Ctrl+O` import · `?` help.
+
+## Development
+
+```bash
+npm test             # 59 unit tests (node:test): DSP maths, acoustics, hardware DB, tag parsers, queue, signal plan
+npm run test:e2e     # 22 end-to-end scenarios in headless Chromium (Playwright)
+npm run lint         # ESLint
+```
+
+### Architecture
+
+```
+src/
+  dsp/         biquad maths identical to the Web Audio spec, LR crossovers, FFT, EQ fitting, curves/presets
+  acoustics/   materials, Eyring/Sabine, room modes + modal sum, boundary gain, image-source IR synthesis, worker
+  hardware/    seed specs, extrapolation engine, brand voicing, receivers, response model
+  library/     tag parsers, importer, IndexedDB library model, artwork, waveforms, demo synthesis
+  player/      queue model, dual-deck player
+  audio/       plan (state → every parameter), engine (Web Audio graph), predict (virtual mic),
+               calibration (auto-EQ/auto setup), bake/recorder, haptics, WAV codec
+  viz/         canvas loop, response plots, analyzers, room editor
+  ui/          app controller, router, shell, components, views
+```
+
+The **signal plan** is the heart of the design: a pure function turns application state into every filter, gain, delay and position. The realtime engine, the offline bake renderer, the frequency-response predictor, the auto-EQ and the unit tests all consume the same plan, so what you see is what you hear.
+
+## Accuracy notes
+
+Rankings are illustrative (Amazon best-seller ranks change hourly). Seed specifications follow manufacturers' published figures to the best of our knowledge; extrapolated entries are physics-based estimates, clearly flagged in the UI and data. The acoustic models are engineering approximations intended to be educational and plausible, not a substitute for measurements.
+
+## License
+
+MIT
