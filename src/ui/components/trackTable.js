@@ -70,22 +70,48 @@ export function trackTable(app, o) {
 
   const currentId = () => app.player.track?.id;
 
+  /** Update the dynamic parts of a row in place (selection, playing, like). */
+  const decorate = (row, i) => {
+    const t = rows[i];
+    if (!t) return;
+    const playing = t.id === currentId();
+    const sel = selected.has(t.id);
+    row.classList.toggle('selected', sel);
+    row.classList.toggle('playing', playing);
+    row.setAttribute('aria-selected', sel ? 'true' : 'false');
+    const idx = row.firstChild;
+    const state = playing ? (app.player.playing ? 'eq' : 'eq-paused') : 'num';
+    if (idx.dataset.state !== state) {
+      idx.dataset.state = state;
+      idx.firstChild.replaceWith(
+        playing
+          ? h('span.eq-bars', { class: app.player.playing ? '' : 'paused' }, h('i'), h('i'), h('i'))
+          : h('span.idx-num', String(numbering === 'track' ? t.track || i + 1 : i + 1)),
+      );
+    }
+    const like = row.querySelector('.tl-like');
+    const liked = app.library.isLiked(t.id);
+    if (like.classList.contains('liked') !== liked) {
+      like.classList.toggle('liked', liked);
+      like.setAttribute('aria-label', liked ? 'Unlike' : 'Like');
+      like.innerHTML = '';
+      like.appendChild(icon(liked ? 'heart-fill' : 'heart', 16));
+    }
+  };
+  const updateStates = () => {
+    for (const [i, row] of list.rows) decorate(row, i);
+  };
+
   const renderRow = (i) => {
     const t = rows[i];
-    const playing = t.id === currentId();
-    const liked = app.library.isLiked(t.id);
-    const numEl = playing
-      ? h('span.eq-bars', { class: app.player.playing ? '' : 'paused' }, h('i'), h('i'), h('i'))
-      : h('span.idx-num', String(numbering === 'track' ? t.track || i + 1 : i + 1));
     const row = h(
       'div.tl-row',
       {
-        class: [selected.has(t.id) ? 'selected' : '', playing ? 'playing' : '', app.library.isLinked(t.id) ? '' : 'unavailable'],
+        class: app.library.isLinked(t.id) ? '' : 'unavailable',
         draggable: 'true',
         role: 'row',
-        'aria-selected': selected.has(t.id) ? 'true' : 'false',
       },
-      h('div.tl-index', numEl, h('span.idx-play', icon('play', 14))),
+      h('div.tl-index', h('span.idx-num', String(numbering === 'track' ? t.track || i + 1 : i + 1)), h('span.idx-play', icon('play', 14))),
       h(
         'div.tl-title',
         showArt ? artEl(app.art, t.artId, { seed: t.album }) : null,
@@ -93,9 +119,11 @@ export function trackTable(app, o) {
       ),
       showAlbum ? h('div.tl-album.ellipsis', h('a', { href: `#/album/${enc(t._albumKey)}`, onClick: (e) => e.stopPropagation() }, t.album)) : null,
       h('div.tl-added.dim.ellipsis', { style: { fontSize: '12.5px' } }, t.addedAt ? new Date(t.addedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : ''),
-      h('button.icon-btn.small.tl-like', { class: liked ? 'liked' : '', 'aria-label': liked ? 'Unlike' : 'Like', onClick: (e) => { e.stopPropagation(); app.toggleLike(t.id); } }, icon(liked ? 'heart-fill' : 'heart', 16)),
+      h('button.icon-btn.small.tl-like', { 'aria-label': 'Like', onClick: (e) => { e.stopPropagation(); app.toggleLike(t.id); } }, icon('heart', 16)),
       h('div.tl-dur', formatTime(t.duration || 0)),
     );
+    row.firstChild.dataset.state = 'num';
+    decorate(row, i);
     row.addEventListener('click', (e) => {
       if (e.target.closest('.idx-play')) {
         play(i);
@@ -114,7 +142,7 @@ export function trackTable(app, o) {
         selected.add(t.id);
         anchor = i;
       }
-      list.refresh();
+      updateStates();
     });
     row.addEventListener('dblclick', () => play(i));
     row.addEventListener('contextmenu', (e) => {
@@ -122,7 +150,7 @@ export function trackTable(app, o) {
         selected.clear();
         selected.add(t.id);
         anchor = i;
-        list.refresh();
+        updateStates();
       }
       const ids = rows.filter((r) => selected.has(r.id)).map((r) => r.id);
       const indices = playlistId ? rows.map((r, k) => (selected.has(r.id) ? k : -1)).filter((k) => k >= 0) : null;
@@ -178,7 +206,7 @@ export function trackTable(app, o) {
     } else if ((e.key === 'a' || e.key === 'A') && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       rows.forEach((r) => selected.add(r.id));
-      list.refresh();
+      updateStates();
     } else if (e.key === 'Delete' && playlistId && selected.size) {
       const indices = rows.map((r, k) => (selected.has(r.id) ? k : -1)).filter((k) => k >= 0);
       app.library.removeFromPlaylist(playlistId, indices);
@@ -191,9 +219,9 @@ export function trackTable(app, o) {
     list.setCount(rows.length);
   };
   const offs = [
-    app.player.on('track', () => list.refresh()),
-    app.player.on('state', () => list.refresh()),
-    app.library.on('likes', () => list.refresh()),
+    app.player.on('track', updateStates),
+    app.player.on('state', updateStates),
+    app.library.on('likes', updateStates),
     app.library.on('change', refreshData),
     app.library.on('playlists', (id) => {
       if (playlistId && (id === playlistId || id == null)) refreshData();

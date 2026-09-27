@@ -1,6 +1,6 @@
 // Library views: home, songs, albums, artists, genres, liked, playlists, search.
 
-import { h, icon, clear, debounce } from '../dom.js';
+import { h, icon, clear, debounce, viewDebounce } from '../dom.js';
 import { enc } from '../router.js';
 import { artEl } from '../components/lists.js';
 import { trackTable } from '../components/trackTable.js';
@@ -132,7 +132,7 @@ export function homeView(app, params, query, disposer) {
   const lib = app.library;
   if (!lib.size) {
     const el = h('div.view-inner.flush', onboarding(app));
-    disposer.add(lib.on('change', () => app.router.go('home', { replace: true })));
+    disposer.add(lib.on('change', () => app.router.current?.name === 'home' && app.router.go('home', { replace: true })));
     return { el, title: 'Welcome' };
   }
   const hour = new Date().getHours();
@@ -161,7 +161,7 @@ export function homeView(app, params, query, disposer) {
     shelf('Artists', '#/artists', lib.artistList().slice(0, 12).map((ar) => artistTile(app, ar))),
     genres.length ? h('section.shelf', h('div.shelf-head', h('h2', 'Genres'), h('a', { href: '#/genres' }, 'Show all')), h('div.genre-chips', genres.map((g) => h('a.chip', { href: `#/genre/${enc(g.key)}` }, g.name, h('span.dim', String(g.trackIds.length)))))) : null,
   );
-  disposer.add(lib.on('change', debounce(() => app.router.go('home', { replace: true }), 300)));
+  disposer.add(lib.on('change', viewDebounce(disposer, () => app.router.current?.name === 'home' && app.router.go('home', { replace: true }), 300)));
   return { el, title: 'Home' };
 }
 
@@ -246,7 +246,7 @@ export function albumsView(app, params, query, disposer) {
     holder.appendChild(g);
   };
   render();
-  disposer.add(lib.on('change', debounce(render, 200)));
+  disposer.add(lib.on('change', viewDebounce(disposer, render, 200)));
   const el = viewShell(
     h('div.page-head', h('div', h('h1', 'Albums'), h('div.muted', plural(lib.albums.size, 'album'))),
       segmented([{ value: 'name', label: 'A–Z' }, { value: 'artist', label: 'Artist' }, { value: 'year', label: 'Year' }, { value: 'recent', label: 'Recent' }], sort, (v) => { sort = v; render(); }, { label: 'Sort albums' })),

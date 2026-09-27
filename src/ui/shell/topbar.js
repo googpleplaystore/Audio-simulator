@@ -11,6 +11,9 @@ export function createTopbar(app) {
   const clearBtn = h('button.icon-btn.small', { 'aria-label': 'Clear search', hidden: true }, icon('close', 14));
   const search = h('label.search-box', icon('search', 18), input, clearBtn);
   const go = debounce((q) => {
+    // Only navigate while the user is still searching (the box has focus or
+    // the search page is showing) — never yank them away from another view.
+    if (document.activeElement !== input && app.router.current?.name !== 'search') return;
     app.router.go(q ? `search?q=${encodeURIComponent(q)}` : 'search', { replace: app.router.current?.name === 'search' });
   }, 120);
   input.addEventListener('input', () => {
@@ -126,6 +129,7 @@ export function createTopbar(app) {
       input.select();
     },
     onRoute: (route) => {
+      if (route.name !== 'search' && document.activeElement !== input) go.cancel();
       if (route.name === 'search') {
         const q = route.query.q || '';
         if (document.activeElement !== input) input.value = q;

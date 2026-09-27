@@ -1,7 +1,7 @@
 // Equalization: 31-band graphic EQ, 12-band parametric EQ with draggable
 // handles, and automatic room correction against a target curve.
 
-import { h, icon, clear, debounce } from '../dom.js';
+import { h, icon, clear, viewDebounce } from '../dom.js';
 import { slider, sliderRow, toggle, select, numberInput, segmented } from '../components/controls.js';
 import { toast } from '../components/overlays.js';
 import { ResponsePlot } from '../../viz/responsePlot.js';
@@ -47,7 +47,7 @@ export function eqView(app, params, query, disposer) {
     headroom.textContent = plan ? `Max boost ${plan.eqMaxBoost.toFixed(1)} dB → preamp ${formatDb(20 * Math.log10(plan.eqPreampGain))}` : '';
   };
   const headroom = h('span.dim.mono', { style: { fontSize: '12px' } });
-  const redrawTotal = debounce(drawTotal, 30);
+  const redrawTotal = viewDebounce(disposer, drawTotal, 30);
   disposer.add(store.subscribe(['eq', 'roomCorrection', 'receiver'], () => setTimeout(redrawTotal, 5)));
 
   // ------------------------------------------------ graphic EQ

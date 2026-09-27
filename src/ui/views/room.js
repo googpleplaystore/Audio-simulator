@@ -1,6 +1,6 @@
 // Room Simulator: interactive placement + room/acoustics settings.
 
-import { h, icon, clear, debounce } from '../dom.js';
+import { h, icon, clear, viewDebounce } from '../dom.js';
 import { RoomEditor } from '../../viz/roomCanvas.js';
 import { ResponsePlot } from '../../viz/responsePlot.js';
 import { sliderRow, toggle, select, segmented, numberInput, knob } from '../components/controls.js';
@@ -138,7 +138,7 @@ export function roomView(app, params, query, disposer) {
   );
 
   // ------------------------------------------------ heatmap
-  const computeHeat = debounce(async () => {
+  const computeHeat = viewDebounce(disposer, async () => {
     const s = store.state;
     if (!s.ui.heatmap) {
       editor.setHeatmap(null);
@@ -210,7 +210,7 @@ export function roomView(app, params, query, disposer) {
   // Re-render inspector values on external changes (canvas drags, other
   // views) — never while the user is interacting with the inspector itself,
   // which would recreate a control mid-drag.
-  const rerender = debounce(() => {
+  const rerender = viewDebounce(disposer, () => {
     if (inspector.contains(document.activeElement) || inspector.querySelector('.dragging')) return;
     renderInspector();
   }, 120);

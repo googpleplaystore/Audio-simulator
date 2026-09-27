@@ -118,6 +118,13 @@ export function debounce(fn, ms) {
   return d;
 }
 
+/** Debounce tied to a view's Disposer: pending calls are cancelled on teardown. */
+export function viewDebounce(disposer, fn, ms) {
+  const d = debounce(fn, ms);
+  disposer.add(() => d.cancel());
+  return d;
+}
+
 export function throttle(fn, ms) {
   let last = 0;
   let timer = null;

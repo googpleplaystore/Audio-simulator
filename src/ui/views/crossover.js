@@ -1,7 +1,7 @@
 // Bass management: active Linkwitz–Riley crossover, polarity/phase, time
 // alignment and a live plot of how mains and subwoofers sum at the seat.
 
-import { h, icon, clear, debounce } from '../dom.js';
+import { h, icon, clear, viewDebounce } from '../dom.js';
 import { sliderRow, toggle, segmented, knob } from '../components/controls.js';
 import { toast } from '../components/overlays.js';
 import { ResponsePlot } from '../../viz/responsePlot.js';
@@ -70,7 +70,7 @@ export function crossoverView(app, params, query, disposer) {
     const grade = sc.std < 2 ? ['Excellent', 'ok'] : sc.std < 3.5 ? ['Good', 'teal'] : sc.std < 5.5 ? ['Fair', 'warn'] : ['Poor', 'danger'];
     scoreEl.append(h('span.badge', { class: grade[1] }, grade[0]), h('span', ` Integration ripple ${sc.std.toFixed(1)} dB (½×–2× crossover)`));
   };
-  const redraw = debounce(draw, 60);
+  const redraw = viewDebounce(disposer, draw, 60);
   disposer.add(store.subscribe(['crossover', 'speakers', 'subs', 'room', 'listener'], redraw));
   disposer.add(app.engine.on('room-filters', redraw));
 
