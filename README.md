@@ -60,7 +60,8 @@ AudioSpace must be served from `http://localhost` or HTTPS (secure context for t
 ### Robustness
 - AudioContext unlock on first gesture and recovery after OS interruptions; decks' `MediaElementSourceNode`s are created once; object URLs revoked on unload.
 - Click-free parameter changes everywhere (`setTargetAtTime` smoothing, declicked filter-type switches, crossfaded A/B bypass and IR swaps) — no pops when dragging EQ sliders or speakers.
-- A/B **bypass** with automatic level matching (`B`), output protection limiter, PWA manifest + service worker.
+- A/B **bypass** with automatic level matching (`B`), PWA manifest + service worker.
+- **True-peak output limiter** (AudioWorklet): 4× oversampled inter-sample peak detection, 2.5 ms look-ahead, hold and release, adjustable ceiling (−0.1…−6 dBTP). Used in realtime and by the offline bake, which reports sample and true peak and can normalise to −1 dBTP.
 
 ## Keyboard shortcuts
 
@@ -69,8 +70,8 @@ AudioSpace must be served from `http://localhost` or HTTPS (secure context for t
 ## Development
 
 ```bash
-npm test             # 59 unit tests (node:test): DSP maths, acoustics, hardware DB, tag parsers, queue, signal plan
-npm run test:e2e     # 22 end-to-end scenarios in headless Chromium (Playwright)
+npm test             # unit tests (node:test): DSP maths, limiter, acoustics, hardware DB, tag parsers, queue, signal plan
+npm run test:e2e     # end-to-end scenarios in headless Chromium (Playwright)
 npm run lint         # ESLint
 ```
 

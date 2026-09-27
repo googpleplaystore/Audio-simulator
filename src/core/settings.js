@@ -32,7 +32,7 @@ export function defaultState() {
   return {
     version: STATE_VERSION,
     player: { volume: 0.8, muted: false, crossfade: 0, gapless: true, replayGain: 'track', replayGainPreampDb: 0, rate: 1 },
-    engine: { simulation: true, output: 'headphones', quality: 'balanced', levelMatch: true },
+    engine: { simulation: true, output: 'headphones', quality: 'balanced', levelMatch: true, limiter: true, ceilingDb: -1 },
     receiver: {
       preset: 'denon-avr-s760h',
       wattsPerChannel: 75,

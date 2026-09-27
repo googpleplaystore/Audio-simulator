@@ -23,6 +23,21 @@ import { clamp, dbToGain } from '../util/math.js';
 const REF_DISTANCE = 0.25; // PannerNode reference distance; compensated so gain = 1/r (m)
 const MAX_DELAY = 1.0;
 const OVERSAMPLE = { high: '4x', balanced: '2x', eco: 'none' };
+const LIMITER_URL = new URL('./worklets/limiter.worklet.js', import.meta.url).href;
+
+const workletModules = new WeakMap();
+
+/** addModule() once per context and URL. */
+export function loadWorkletModule(ctx, url) {
+  let mods = workletModules.get(ctx);
+  if (!mods) workletModules.set(ctx, (mods = new Map()));
+  if (!mods.has(url)) {
+    const p = ctx.audioWorklet.addModule(url);
+    p.catch(() => mods.delete(url));
+    mods.set(url, p);
+  }
+  return mods.get(url);
+}
 
 class SourceChain {
   constructor(engine, p) {
@@ -386,19 +401,85 @@ export class SimulationEngine extends Emitter {
     this.directX.connect(this.mix);
     this.volume = g(1);
     this.mix.connect(this.volume);
+    // Output protection: the true-peak lookahead limiter worklet is swapped in
+    // as soon as its module loads; a DynamicsCompressor covers the meantime
+    // (and browsers without AudioWorklet).
     this.limiter = ctx.createDynamicsCompressor();
-    this.limiter.threshold.value = -2;
     this.limiter.knee.value = 0;
-    this.limiter.ratio.value = 20;
     this.limiter.attack.value = 0.002;
     this.limiter.release.value = 0.12;
-    // Compensate the compressor's automatic make-up gain: 0.6·(−(T + (0−T)/R)).
-    const makeupDb = 0.6 * -(-2 + 2 / 20);
-    this.limiterComp = g(dbToGain(-makeupDb));
+    this.limiterComp = g(1);
+    this.fallbackOut = g(1);
     this.output = g();
-    this.volume.connect(this.limiter).connect(this.limiterComp).connect(this.output);
+    this.volume.connect(this.limiter).connect(this.limiterComp).connect(this.fallbackOut).connect(this.output);
+    this.tpLimiter = null;
+    this.tpStats = null;
+    this.limiterCfg = { enabled: true, ceilingDb: -1 };
+    this._configureFallbackLimiter();
 
     if (!this.offline) this._buildTaps();
+    this.ready = this._attachLimiter();
+  }
+
+  _configureFallbackLimiter() {
+    const { enabled, ceilingDb } = this.limiterCfg;
+    // The compressor overshoots on fast transients, so it aims 1 dB lower.
+    const T = enabled ? ceilingDb - 1 : 0;
+    const R = enabled ? 20 : 1;
+    this.limiter.threshold.value = T;
+    this.limiter.ratio.value = R;
+    // Cancel the compressor's automatic make-up gain: 0.6·(−(T + (0−T)/R)).
+    this.limiterComp.gain.value = dbToGain(-0.6 * -(T - T / R));
+  }
+
+  async _attachLimiter() {
+    const ctx = this.ctx;
+    if (!ctx.audioWorklet || typeof AudioWorkletNode === 'undefined') return false;
+    try {
+      await loadWorkletModule(ctx, LIMITER_URL);
+      if (this.disposed) return false;
+      const node = new AudioWorkletNode(ctx, 'audiospace-limiter', {
+        numberOfInputs: 1,
+        numberOfOutputs: 1,
+        outputChannelCount: [2],
+        channelCount: 2,
+        channelCountMode: 'explicit',
+        channelInterpretation: 'speakers',
+        processorOptions: { ceilingDb: this.limiterCfg.ceilingDb, releaseMs: 80, lookaheadMs: 2.5, holdMs: 5 },
+      });
+      node.port.postMessage({ enabled: this.limiterCfg.enabled });
+      node.port.onmessage = (e) => {
+        if (e.data?.type === 'stats') this.tpStats = e.data;
+      };
+      const out = ctx.createGain();
+      out.gain.value = 0;
+      this.volume.connect(node).connect(out).connect(this.output);
+      this.tpLimiter = node;
+      this.tpOut = out;
+      crossfade(ctx, this.fallbackOut, out, 0.03);
+      const detach = () => {
+        try {
+          this.volume.disconnect(this.limiter);
+        } catch {
+          /* already detached */
+        }
+      };
+      if (this.offline) detach();
+      else setTimeout(detach, 250);
+      return true;
+    } catch (err) {
+      console.warn('[engine] true-peak limiter unavailable, using DynamicsCompressor', err);
+      return false;
+    }
+  }
+
+  _setLimiter(enabled, ceilingDb) {
+    const cfg = this.limiterCfg;
+    if (cfg.enabled === enabled && cfg.ceilingDb === ceilingDb) return;
+    cfg.enabled = enabled;
+    cfg.ceilingDb = ceilingDb;
+    this._configureFallbackLimiter();
+    this.tpLimiter?.port.postMessage({ enabled, ceilingDb });
   }
 
   _buildTaps() {
@@ -526,6 +607,7 @@ export class SimulationEngine extends Emitter {
     const pl = state.player;
     const vol = pl.muted ? 0 : Math.pow(clamp(pl.volume ?? 0.8, 0, 1), 2);
     setParam(ctx, this.volume.gain, vol, 0.02);
+    this._setLimiter(state.engine.limiter !== false, clamp(state.engine.ceilingDb ?? -1, -12, 0));
     this._reconcileSources(plan);
   }
 
@@ -673,7 +755,13 @@ export class SimulationEngine extends Emitter {
         }
       }
     }
-    this.meters.limiterDb = this.limiter.reduction;
+    if (this.tpLimiter) {
+      const s = this.tpStats;
+      this.meters.limiterDb = s ? 20 * Math.log10(Math.max(s.minGain, 1e-6)) : 0;
+      this.meters.outPeakDb = s && s.outPeak > 0 ? 20 * Math.log10(s.outPeak) : -Infinity;
+    } else {
+      this.meters.limiterDb = this.limiter.reduction;
+    }
     // SPL at the listening position (Z-weighted, fast).
     this.taps.spl.getFloatTimeDomainData(this.tmp);
     let sq = 0;
@@ -711,6 +799,7 @@ export class SimulationEngine extends Emitter {
   }
 
   dispose() {
+    this.disposed = true;
     clearInterval(this.meterTimer);
     clearTimeout(this.roomTimer);
     clearTimeout(this.irTimer);
@@ -720,6 +809,12 @@ export class SimulationEngine extends Emitter {
       this.output.disconnect();
     } catch {
       /* ignore */
+    }
+    if (this.tpLimiter) {
+      this.tpLimiter.port.onmessage = null;
+      this.tpLimiter.port.postMessage({ dispose: true });
+      this.tpLimiter.port.close();
+      this.tpLimiter.disconnect();
     }
     this.removeAll();
   }

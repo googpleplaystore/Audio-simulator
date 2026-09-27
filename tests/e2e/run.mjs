@@ -337,6 +337,28 @@ await step('bake renders a WAV download', async () => {
   assert(buf.length > 48000 * 2 * 3 * 2, `wav size ${buf.length}`);
 });
 
+await step('true-peak limiter: realtime worklet attached, hot bake stays under the ceiling', async () => {
+  const attached = await evalApp(async () => {
+    await window.__audiospace.engine.ready;
+    return !!window.__audiospace.engine.tpLimiter;
+  });
+  assert(attached, 'limiter worklet not attached to the realtime engine');
+  const res = await page.evaluate(async () => {
+    const app = window.__audiospace;
+    const { bakeTrack } = await import('/src/audio/bake.js');
+    const t = [...app.library.tracks.values()].find((x) => x.title === 'Pink Noise (Uncorrelated Stereo)') || [...app.library.tracks.values()].find((x) => x.source === 'demo');
+    const state = JSON.parse(JSON.stringify(app.store.state));
+    state.receiver.masterDb = 12; // drive everything well past full scale
+    state.engine.limiter = true;
+    state.engine.ceilingDb = -1;
+    const r = await bakeTrack({ blob: await app.library.getFile(t.id), state, duration: 4, tail: 0.5, bitDepth: 32 });
+    return { tp: r.truePeakDb, sp: r.peakDb };
+  });
+  assert(res.tp <= -1 + 0.15, `true peak ${res.tp.toFixed(2)} dBTP exceeds −1 dBTP ceiling`);
+  assert(res.sp <= -1 + 1e-3, `sample peak ${res.sp.toFixed(2)} dBFS`);
+  assert(res.sp > -6, `limiter should be working hard, got ${res.sp.toFixed(2)} dBFS`);
+});
+
 await step('settings: speaker output switches panners to equal-power', async () => {
   await page.goto(`${base}#/settings`);
   await page.click('.segmented button:has-text("Speakers (equal-power)")');

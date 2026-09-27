@@ -6,6 +6,7 @@ import { SimulationEngine } from './engine.js';
 import { encodeWav } from './wav.js';
 import { computeIR } from '../acoustics/compute.js';
 import { buildPlan, reverbSourcePositions } from './plan.js';
+import { truePeak } from './worklets/limiter.worklet.js';
 
 function offlineCtor() {
   return globalThis.OfflineAudioContext || globalThis.webkitOfflineAudioContext;
@@ -26,7 +27,7 @@ export async function decodeBlob(blob, sampleRate) {
  * @param {number} [o.start=0] seconds
  * @param {number|null} [o.duration=null] seconds (null = to end)
  * @param {number} [o.tail=1.5] extra seconds for reverb tail
- * @param {boolean} [o.normalize=false] peak-normalise to −1 dBFS
+ * @param {boolean} [o.normalize=false] normalise the true peak to −1 dBTP
  * @param {'headphones'|'speakers'} [o.output]
  * @param {(p:number)=>void} [o.onProgress]
  * @param {{cancelled:boolean}} [o.token]
@@ -48,6 +49,7 @@ export async function bakeTrack(o) {
   onProgress?.(0.02, 'Building room model…');
   const engine = new SimulationEngine(ctx, { offline: true, quality: 'high' });
   await engine.applyState(state);
+  await engine.ready;
   const node = ctx.createBufferSource();
   node.buffer = src;
   node.connect(engine.input);
@@ -67,17 +69,23 @@ export async function bakeTrack(o) {
   }
   const rendered = await ctx.startRendering();
   if (token?.cancelled) throw new Error('Cancelled');
-  onProgress?.(0.92, 'Encoding WAV…');
+  onProgress?.(0.92, 'Measuring true peak…');
   const channels = [rendered.getChannelData(0), rendered.getChannelData(1)];
   let peak = 0;
   for (const ch of channels) for (let i = 0; i < ch.length; i++) peak = Math.max(peak, Math.abs(ch[i]));
+  let truePeakDb = truePeak(channels);
+  // Normalise the true peak (not just the sample peak) to −1 dBTP.
   let gain = 1;
-  if (normalize && peak > 0) gain = Math.pow(10, -1 / 20) / peak;
-  if (gain !== 1) for (const ch of channels) for (let i = 0; i < ch.length; i++) ch[i] *= gain;
+  if (normalize && Number.isFinite(truePeakDb)) gain = Math.pow(10, (-1 - truePeakDb) / 20);
+  if (gain !== 1) {
+    for (const ch of channels) for (let i = 0; i < ch.length; i++) ch[i] *= gain;
+    truePeakDb += 20 * Math.log10(gain);
+  }
+  onProgress?.(0.95, 'Encoding WAV…');
   const out = encodeWav({ channels, sampleRate }, { bitDepth, meta: { software: 'AudioSpace Simulator', ...meta } });
   onProgress?.(1, 'Done');
   engine.dispose();
-  return { blob: out, peakDb: 20 * Math.log10(Math.max(peak * gain, 1e-9)), duration: total, sampleRate };
+  return { blob: out, peakDb: 20 * Math.log10(Math.max(peak * gain, 1e-9)), truePeakDb, duration: total, sampleRate };
 }
 
 /** Export the synthesised room impulse response (4-ch true stereo, incl. direct sound). */

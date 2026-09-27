@@ -111,9 +111,9 @@ export function bakeView(app, params, query, disposer) {
       });
       const name = `${t.artist} - ${t.title} [AudioSpace ${app.store.state.room.preset}].wav`.replace(/[\\/:*?"<>|]/g, '_');
       const url = URL.createObjectURL(res.blob);
-      bakes.unshift({ name, url, size: res.blob.size, info: `${opts.sampleRate / 1000} kHz · ${opts.bitDepth}-bit · peak ${res.peakDb.toFixed(1)} dBFS` });
+      bakes.unshift({ name, url, size: res.blob.size, info: `${opts.sampleRate / 1000} kHz · ${opts.bitDepth}-bit · ${res.truePeakDb.toFixed(1)} dBTP` });
       renderHistory();
-      status.textContent = `Done — ${formatTime(res.duration)} rendered. Peak ${res.peakDb.toFixed(1)} dBFS${res.peakDb > -0.1 ? ' (consider Normalize)' : ''}.`;
+      status.textContent = `Done — ${formatTime(res.duration)} rendered. Sample peak ${res.peakDb.toFixed(1)} dBFS, true peak ${res.truePeakDb.toFixed(1)} dBTP${res.truePeakDb > -0.5 ? ' (consider Normalize)' : ''}.`;
       const a = h('a', { href: url, download: name });
       document.body.appendChild(a);
       a.click();
@@ -166,7 +166,7 @@ export function bakeView(app, params, query, disposer) {
           h('div.field', h('label', 'Sample rate'), segmented([{ value: 44100, label: '44.1 kHz' }, { value: 48000, label: '48 kHz' }, { value: 96000, label: '96 kHz' }], 48000, (v) => (opts.sampleRate = Number(v)))),
           h('div.field', h('label', 'Format'), segmented([{ value: 16, label: '16-bit (dithered)' }, { value: 24, label: '24-bit' }, { value: 32, label: '32-bit float' }], 24, (v) => (opts.bitDepth = Number(v)))),
           h('div.field', h('label', 'Render for'), segmented([{ value: 'headphones', label: 'Headphones (binaural)' }, { value: 'speakers', label: 'Speakers' }], opts.output, (v) => (opts.output = v))),
-          toggle('Normalize peak to −1 dBFS', false, (v) => (opts.normalize = v)),
+          toggle('Normalize true peak to −1 dBTP', false, (v) => (opts.normalize = v)),
         ),
       ),
       h('div.card.span-2',
@@ -213,6 +213,8 @@ export function settingsView(app, params, query, disposer) {
           h('div.field', h('label', 'Processing quality'), segmented([{ value: 'high', label: 'High (4× oversampled)' }, { value: 'balanced', label: 'Balanced' }, { value: 'eco', label: 'Eco' }], store.get('engine.quality'), (v) => store.set('engine.quality', v))),
           toggle('Simulation enabled (B toggles A/B)', store.get('engine.simulation'), (v) => store.set('engine.simulation', v)),
           toggle('Level-match the bypass path for fair A/B', store.get('engine.levelMatch'), (v) => store.set('engine.levelMatch', v)),
+          toggle('Output protection limiter (true-peak, 2.5 ms look-ahead)', store.get('engine.limiter') !== false, (v) => store.set('engine.limiter', v)),
+          h('div.field', h('label', 'Limiter ceiling'), segmented([{ value: -0.1, label: '−0.1 dBTP' }, { value: -1, label: '−1 dBTP' }, { value: -2, label: '−2 dBTP' }, { value: -6, label: '−6 dBTP' }], store.get('engine.ceilingDb') ?? -1, (v) => store.set('engine.ceilingDb', Number(v)))),
           h('div.dim', `Audio context: ${app.ctx.sampleRate} Hz · base latency ${((app.ctx.baseLatency || 0) * 1000).toFixed(1)} ms · state ${app.ctx.state}`),
         ),
       ),
