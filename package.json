@@ -1,0 +1,19 @@
+{
+  "name": "audiospace",
+  "version": "1.0.0",
+  "description": "AudioSpace: The Ultimate Virtual Audio Environment Simulator — a browser-based spatial audio engine, hardware simulator and music player.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "serve": "node scripts/serve.mjs",
+    "test": "node --test tests/unit/*.test.mjs",
+    "test:e2e": "node tests/e2e/run.mjs",
+    "lint": "eslint src tests scripts",
+    "export:hardware": "node scripts/export-hardware-json.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
