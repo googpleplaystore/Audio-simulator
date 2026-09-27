@@ -12,6 +12,8 @@ export class ResponsePlot {
    */
   constructor(canvas, o = {}) {
     this.canvas = canvas;
+    if (!canvas.hasAttribute('role')) canvas.setAttribute('role', 'img');
+    if (!canvas.hasAttribute('aria-label')) canvas.setAttribute('aria-label', o.label || 'Frequency response graph');
     this.fMin = o.fMin ?? 20;
     this.fMax = o.fMax ?? 20000;
     this.dbMin = o.dbMin ?? -18;

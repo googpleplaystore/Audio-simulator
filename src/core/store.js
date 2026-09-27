@@ -90,12 +90,8 @@ export class Store extends Emitter {
     const changed = this.dirty;
     this.dirty = new Set();
     for (const sub of [...this.subs]) {
-      if (!sub.paths) {
-        sub.fn(changed);
-        continue;
-      }
-      let hit = false;
-      for (const c of changed) {
+      let hit = !sub.paths;
+      for (const c of hit ? [] : changed) {
         for (const p of sub.paths) {
           if (related(c, p)) {
             hit = true;
@@ -136,8 +132,12 @@ export class Store extends Emitter {
     try {
       const data = this.persistFilter ? this.persistFilter(this.state) : this.state;
       localStorage.setItem(this.persistKey, JSON.stringify(data));
+      this.saveFailed = false;
     } catch (err) {
       console.warn('[store] save failed', err);
+      // Report once per failure streak (e.g. storage quota exceeded).
+      if (!this.saveFailed) this.emit('save-error', err);
+      this.saveFailed = true;
     }
   }
 

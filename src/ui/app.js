@@ -52,6 +52,7 @@ export class App {
     this.haptics.start();
 
     this.store.subscribe(ENGINE_PATHS, () => this.scheduleEngine());
+    this.store.on('save-error', () => toast('Settings could not be saved — browser storage is full or blocked. Delete some scenes or free up space.', { type: 'error', timeout: 8000 }));
     this.store.subscribe(['ui.reduceMotion'], () => document.documentElement.classList.toggle('reduce-motion', !!this.store.get('ui.reduceMotion')));
     document.documentElement.classList.toggle('reduce-motion', !!this.store.get('ui.reduceMotion'));
 
@@ -109,8 +110,15 @@ export class App {
   }
 
   // ------------------------------------------------------------ layout
+  /** Below this width the side panel overlays the page instead of docking. */
+  panelOverlays() {
+    return !!window.matchMedia?.('(max-width: 1180px)').matches;
+  }
+
   _mount() {
     clear(this.root);
+    // An overlaying panel would hide the whole page on phones: start closed.
+    if (this.panelOverlays() && this.store.get('ui.queueOpen')) this.store.set('ui.queueOpen', false);
     this.shell = h('div.app', { class: this.store.get('ui.queueOpen') ? '' : 'panel-closed' });
     this.sidebar = createSidebar(this);
     this.viewScroller = h('div.view', { id: 'view', tabindex: '-1' });
@@ -125,6 +133,7 @@ export class App {
   }
 
   _showView(route) {
+    if (this.panelOverlays() && this.store.get('ui.queueOpen')) this.store.set('ui.queueOpen', false);
     if (this.currentView) {
       this.currentView.disposer?.run();
       this.currentView.destroy?.();

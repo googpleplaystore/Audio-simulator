@@ -8,8 +8,10 @@ import { clamp, logPos } from '../util/math.js';
 import { formatHzShort } from '../util/format.js';
 
 class BasePlot {
-  constructor(canvas) {
+  constructor(canvas, label = 'Measurement graph') {
     this.canvas = canvas;
+    if (!canvas.hasAttribute('role')) canvas.setAttribute('role', 'img');
+    if (!canvas.hasAttribute('aria-label')) canvas.setAttribute('aria-label', label);
     this.destroyed = false;
     this.wasConnected = false;
     this.ro = new ResizeObserver(() => {
@@ -60,7 +62,7 @@ function legend(ctx, items, x, y) {
  */
 export class XYPlot extends BasePlot {
   constructor(canvas, o = {}) {
-    super(canvas);
+    super(canvas, o.label || 'Time-domain graph');
     this.xMin = o.xMin ?? 0;
     this.xMax = o.xMax ?? 100;
     this.yMin = o.yMin ?? -1;
@@ -180,7 +182,7 @@ export class XYPlot extends BasePlot {
  */
 export class WaterfallPlot extends BasePlot {
   constructor(canvas, o = {}) {
-    super(canvas);
+    super(canvas, o.label || 'Waterfall (cumulative spectral decay) graph');
     this.range = o.range ?? 45; // dB shown below the peak
     this.data = null;
     this.lut = colormap();
@@ -266,7 +268,7 @@ export class WaterfallPlot extends BasePlot {
 /** Grouped vertical bars per octave band. groups: [{label, color, values:[]}] */
 export class BarsPlot extends BasePlot {
   constructor(canvas, o = {}) {
-    super(canvas);
+    super(canvas, o.label || 'Reverberation time per octave band');
     this.labels = o.labels ?? [];
     this.unit = o.unit ?? '';
     this.groups = [];

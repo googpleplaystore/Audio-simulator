@@ -81,7 +81,9 @@ AudioSpace must be served from `http://localhost` or HTTPS (secure context for t
 
 ### Robustness
 - AudioContext unlock on first gesture and recovery after OS interruptions; decks' `MediaElementSourceNode`s are created once; object URLs revoked on unload.
-- Click-free parameter changes everywhere (`setTargetAtTime` smoothing, declicked filter-type switches, crossfaded A/B bypass and IR swaps) — no pops when dragging EQ sliders or speakers.
+- Click-free parameter changes everywhere: `setTargetAtTime` smoothing, **double-buffered filter banks** (filter-type changes are crossfaded sample-accurately on the audio clock), **warmed-up reverb swaps** (the new room's convolver builds up silently before the outputs crossfade) and crossfaded A/B bypass. An E2E test records the engine output while sweeping EQ, filter types, crossover slopes, volume, bypass, speaker positions and rooms over a steady tone and fails on any discontinuity.
+- Leak-checked: 60 rapid track switches leave heap, object URLs, audio nodes and DOM size unchanged; plots, workers and worklet processors are released when views close or recordings stop.
+- Phones: the side panel starts closed and a **More** tab reaches every studio tool; storage-quota failures are reported instead of silently losing settings.
 - A/B **bypass** with automatic level matching (`B`), PWA manifest + service worker.
 
 ## Keyboard shortcuts

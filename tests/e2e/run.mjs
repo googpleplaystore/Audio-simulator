@@ -565,6 +565,28 @@ await step('every view renders without console errors', async () => {
   assert(!(await page.locator('.tl-head:has-text("null")').count()), 'no literal null in headers');
 });
 
+await step('phone layout: panel starts closed and "More" reaches every studio tool', async () => {
+  const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+  const p = await phone.newPage();
+  try {
+    await p.goto(`${base}#/home`);
+    await p.waitForFunction(() => window.__audiospace);
+    const closed = await p.evaluate(() => document.querySelector('.app').classList.contains('panel-closed'));
+    assert(closed, 'side panel must not cover the page on phones');
+    const more = p.locator('.sidebar .nav-item.mobile-only');
+    await more.scrollIntoViewIfNeeded();
+    await more.tap();
+    await p.waitForSelector('.menu');
+    assert((await p.locator('.menu-item').count()) >= 10, 'More menu lists the tools');
+    await p.tap('.menu-item:has-text("Measurements")');
+    await p.waitForSelector('h1:has-text("Measurements")');
+    const overflow = await p.evaluate(() => document.querySelector('.view').scrollWidth - document.querySelector('.view').clientWidth);
+    assert(overflow <= 1, `horizontal overflow ${overflow}px`);
+  } finally {
+    await phone.close();
+  }
+});
+
 await step('no console errors during the whole run', async () => {
   const relevant = consoleErrors.filter((e) => !/Failed to load resource|MEDIA_ERR|DEMUXER|PIPELINE_ERROR|format or codec|could not be decoded/i.test(e));
   assert(!relevant.length, `console errors:\n${relevant.join('\n')}`);

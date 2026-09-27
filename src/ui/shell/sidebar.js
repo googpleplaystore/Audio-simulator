@@ -3,7 +3,7 @@
 import { h, icon, clear } from '../dom.js';
 import { enc } from '../router.js';
 import { artEl } from '../components/lists.js';
-import { toast } from '../components/overlays.js';
+import { toast, openMenu } from '../components/overlays.js';
 import { plural } from '../../util/format.js';
 
 export const TRACK_DRAG_TYPE = 'application/x-audiospace-tracks';
@@ -19,6 +19,26 @@ export function createSidebar(app) {
   const importStatus = h('div.import-status', { hidden: true });
   const permBanner = h('button.btn.small.ghost', { hidden: true, onClick: () => app.reconnectLibrary() }, icon('link', 14), h('span.label', 'Reconnect library'));
   const playlistsEl = h('div.nav-playlists');
+  // Phones show a compact tab bar; everything else lives behind "More".
+  const MORE = [
+    ['albums', 'album', 'Albums'],
+    ['artists', 'artist', 'Artists'],
+    ['liked', 'heart', 'Liked Songs'],
+    ['playlists', 'playlist', 'Playlists'],
+    ['studio/hardware', 'speaker', 'Hardware Catalog'],
+    ['studio/receiver', 'receiver', 'Receiver & Amp'],
+    ['studio/crossover', 'crossover', 'Crossover'],
+    ['studio/bass', 'sub', 'Bass Optimizer'],
+    ['studio/measure', 'mic', 'Measurements'],
+    ['studio/compare', 'compare', 'Scenes & ABX'],
+    ['studio/bake', 'bake', 'Bake & Export'],
+    ['settings', 'settings', 'Settings'],
+  ];
+  const moreBtn = h('button.nav-item.mobile-only', { type: 'button', 'aria-label': 'More', 'aria-haspopup': 'menu' }, icon('more', 20), h('span.label', 'More'));
+  moreBtn.addEventListener('click', () => {
+    const r = moreBtn.getBoundingClientRect();
+    openMenu(r.left, r.top - 8, MORE.map(([path, ic, label]) => ({ label, icon: ic, onClick: () => app.go(path) })));
+  });
 
   const el = h(
     'aside.sidebar',
@@ -44,6 +64,7 @@ export function createSidebar(app) {
       nav('studio/measure', 'mic', 'Measurements', { match: ['measure'], desktopOnly: true }),
       nav('studio/compare', 'compare', 'Scenes & ABX', { match: ['compare'], desktopOnly: true }),
       nav('studio/bake', 'bake', 'Bake & Export', { match: ['bake'], desktopOnly: true }),
+      moreBtn,
       h('div.nav-section', h('span', 'Playlists'), h('button.icon-btn.small', { 'data-tip': 'Create playlist', 'aria-label': 'Create playlist', onClick: () => app.newPlaylist() }, icon('plus', 16))),
       playlistsEl,
     ),
