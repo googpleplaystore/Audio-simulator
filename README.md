@@ -12,7 +12,33 @@ Everything runs locally with the Web Audio API. Your music never leaves your dev
 | ![Analyzers](docs/screenshots/analyzers.png) | ![Receiver](docs/screenshots/receiver.png) |
 | ![Crossover](docs/screenshots/crossover.png) | ![Equalizer](docs/screenshots/eq.png) |
 
-## Quick start
+## Install
+
+### Windows 10/11
+Download **`AudioSpace-Setup-<version>.exe`** from the repository's *Releases* (built by the *Desktop builds* workflow for every `v*` tag, and attached to each workflow run as the `audiospace-desktop` artifact) and run it.
+
+- Installs for your user only, into `%LOCALAPPDATA%\Programs\AudioSpace`; **no administrator rights** needed.
+- Adds a Start menu shortcut (and optionally a desktop shortcut) and an entry in *Settings › Apps* for uninstalling. Silent install/uninstall: `AudioSpace-Setup-<version>.exe /S`, `Uninstall.exe /S`.
+- The installer isn't code-signed yet, so SmartScreen may say *"Windows protected your PC"* — choose **More info › Run anyway**.
+- Prefer no installation? `AudioSpace-<version>-portable.exe` is the same app as a single file.
+
+### Arch Linux (and EndeavourOS, Manjaro, CachyOS, …)
+One command — installs the build tools, builds a real pacman package (`audiospace-git`) with `makepkg` and installs it:
+
+```bash
+git clone https://github.com/googpleplaystore/Audio-simulator.git /tmp/audiospace && bash /tmp/audiospace/packaging/arch/install.sh
+```
+
+This uses your normal git credentials, so it also works while the repository is private. Once it is public you can instead run
+`curl -fsSL https://raw.githubusercontent.com/googpleplaystore/Audio-simulator/HEAD/packaging/arch/install.sh | bash`.
+Start AudioSpace from your application menu or with `audiospace`; remove it with `sudo pacman -R audiospace-git`. Installing `chromium` gives it its own app window (otherwise it opens in your default browser).
+
+### How the desktop app works
+The installers ship a small launcher (`desktop/`, Go, no dependencies) with the whole web app embedded. It serves the app on `127.0.0.1:47810` (a fixed port, so your library and settings — kept in the browser's storage — are there every time), opens it in a chromeless **Edge/Chrome/Chromium app window** (falling back to your default browser; set `AUDIOSPACE_BROWSER` to choose), reuses an already running instance, and quits by itself after the last window closes. Options: `--port`, `--no-browser`, `--keep-running`, `--version`.
+
+Build everything yourself with `npm run build:desktop` (needs Go ≥ 1.22 and NSIS; `packaging/build-desktop.sh --linux` needs only Go). Output goes to `dist/`.
+
+## Quick start (development)
 
 ```bash
 npm start            # zero-dependency static server → http://localhost:8080
@@ -97,6 +123,7 @@ AudioSpace must be served from `http://localhost` or HTTPS (secure context for t
 
 ```bash
 npm test             # unit tests (node:test): DSP maths, limiter, measurement analysis, acoustics, hardware DB, tag parsers, queue, signal plan
+(cd desktop && go test ./...)   # desktop launcher tests
 npm run test:e2e     # end-to-end scenarios in headless Chromium (Playwright)
 npm run lint         # ESLint
 ```
@@ -117,6 +144,8 @@ src/
   viz/         canvas loop, response/XY/waterfall/bar plots, analyzers, room editor
   core/        store, settings/migration, IndexedDB, scenes + ABX statistics
   ui/          app controller, router, shell, components, views
+desktop/       Go launcher that embeds and serves the web app (Windows/Linux/macOS)
+packaging/     build script, NSIS installer (windows/), PKGBUILD + one-command installer (arch/), icons
 ```
 
 The **signal plan** is the heart of the design: a pure function turns application state into every filter, gain, delay and position. The realtime engine, the offline bake renderer, the frequency-response predictor, the auto-EQ and the unit tests all consume the same plan, so what you see is what you hear.

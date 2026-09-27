@@ -14,7 +14,7 @@ const browserGlobals = {
 const nodeGlobals = { process: 'readonly', Buffer: 'readonly', console: 'readonly', URL: 'readonly', Blob: 'readonly', TextEncoder: 'readonly', TextDecoder: 'readonly', globalThis: 'readonly', setTimeout: 'readonly', performance: 'readonly' };
 
 export default [
-  { ignores: ['node_modules/**', 'tests/e2e/artifacts/**', 'data/**'] },
+  { ignores: ['node_modules/**', 'tests/e2e/artifacts/**', 'data/**', 'dist/**', 'desktop/webapp/**'] },
   {
     files: ['**/*.js', '**/*.mjs'],
     languageOptions: { ecmaVersion: 2023, sourceType: 'module', globals: { ...browserGlobals, ...nodeGlobals } },
