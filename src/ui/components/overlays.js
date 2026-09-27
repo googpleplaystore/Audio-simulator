@@ -1,6 +1,6 @@
 // Toasts, modals (alert/confirm/prompt/custom), context menus and tooltips.
 
-import { h, icon, clear } from '../dom.js';
+import { h, icon } from '../dom.js';
 
 // ------------------------------------------------------------------ toasts
 let toastRoot = null;
@@ -254,4 +254,3 @@ document.addEventListener('pointerout', (e) => {
 });
 document.addEventListener('pointerdown', hideTip, true);
 
-export { clear };

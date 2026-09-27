@@ -6,10 +6,10 @@ import { artEl } from '../components/lists.js';
 import { trackTable } from '../components/trackTable.js';
 import { segmented } from '../components/controls.js';
 import { openMenu, confirmDialog, promptDialog, modal, toast } from '../components/overlays.js';
-import { formatLongDuration, plural, formatTime } from '../../util/format.js';
+import { formatLongDuration, plural } from '../../util/format.js';
 import { getHardware } from '../../hardware/index.js';
 import { ROOM_PRESETS, rt60Mid, volume } from '../../acoustics/room.js';
-import { artistKeyOf, keyOf } from '../../library/library.js';
+import { keyOf } from '../../library/library.js';
 import { Importer } from '../../library/importer.js';
 
 // ------------------------------------------------------------------ helpers
@@ -504,4 +504,3 @@ export function notFound(msg) {
   return { el: viewShell(h('div.empty', h('div.empty-icon', icon('info', 28)), h('h2', msg), h('a.btn', { href: '#/home' }, 'Go home'))), title: msg };
 }
 
-export { artistKeyOf, formatTime };

@@ -7,11 +7,10 @@ import { toast } from '../components/overlays.js';
 import { ResponsePlot } from '../../viz/responsePlot.js';
 import { buildPlan } from '../../audio/plan.js';
 import { predictSystem, bandMeanDb } from '../../audio/predict.js';
-import { cascadeMagnitudeDb, linkwitzRiley } from '../../dsp/biquad.js';
+import { cascadeMagnitudeDb } from '../../dsp/biquad.js';
 import { STANDARD_CROSSOVERS, suggestCrossover } from '../../dsp/curves.js';
 import { getHardware } from '../../hardware/index.js';
 import { octaveGrid, stddev, clamp } from '../../util/math.js';
-import { formatHz } from '../../util/format.js';
 
 const FREQS = octaveGrid(15, 1000, 48);
 
@@ -170,4 +169,3 @@ function snapFreq(v) {
   return near || Math.round(clamp(v, 40, 250));
 }
 
-export { linkwitzRiley, formatHz };

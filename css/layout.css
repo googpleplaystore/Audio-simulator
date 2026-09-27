@@ -389,7 +389,7 @@
 
 @media (max-width: 680px) {
   :root {
-    --player-h: 132px;
+    --player-h: 164px;
   }
 
   .app {
@@ -418,12 +418,19 @@
     gap: 2px;
   }
 
+  /* Flatten the sidebar into a scrollable bottom tab bar. */
+  .sidebar .nav-scroll,
+  .sidebar .sidebar-footer {
+    display: contents;
+  }
+
   .sidebar .brand,
   .sidebar .nav-section,
-  .sidebar .nav-scroll,
-  .sidebar .sidebar-footer,
+  .sidebar .nav-playlists,
+  .sidebar .import-status,
+  .sidebar .sidebar-footer > .btn,
   .sidebar .nav-item.desktop-only {
-    display: none;
+    display: none !important;
   }
 
   .sidebar .nav-item {
@@ -488,5 +495,13 @@
     bottom: 0;
     width: 100vw;
     border-radius: 0;
+  }
+
+  .toasts {
+    bottom: calc(var(--player-h) + 76px);
+  }
+
+  .sidebar .nav-item {
+    min-width: 64px;
   }
 }

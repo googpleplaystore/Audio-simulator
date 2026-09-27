@@ -2,7 +2,7 @@
 // handles, and automatic room correction against a target curve.
 
 import { h, icon, clear, viewDebounce } from '../dom.js';
-import { slider, sliderRow, toggle, select, numberInput, segmented } from '../components/controls.js';
+import { slider, sliderRow, toggle, select, numberInput } from '../components/controls.js';
 import { toast } from '../components/overlays.js';
 import { ResponsePlot } from '../../viz/responsePlot.js';
 import { GEQ_FREQS, GEQ_PRESETS, GEQ_Q, TARGET_CURVES } from '../../dsp/curves.js';
@@ -264,4 +264,3 @@ export function eqView(app, params, query, disposer) {
   };
 }
 
-export { segmented };

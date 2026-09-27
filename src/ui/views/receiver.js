@@ -3,7 +3,7 @@
 
 import { h, icon, clear } from '../dom.js';
 import { knob, sliderRow, toggle, select, segmented } from '../components/controls.js';
-import { toast, modal } from '../components/overlays.js';
+import { modal } from '../components/overlays.js';
 import { RECEIVERS, getReceiver, AMP_CLASSES } from '../../hardware/receivers.js';
 import { getHardware } from '../../hardware/index.js';
 import { autoSetup, computeRoomCorrection } from '../../audio/calibration.js';
